@@ -49,26 +49,78 @@ df["Amount_corrigido"] = df.groupby("Opportunity_ID")["Total_Product_Amount"].tr
 # 4. NORMALIZAR LEAD SOURCE (ORDEM CORRETA)
 # =========================
 
-def map_lead_source(x):
-    if pd.isna(x):
-        return "Unknown"
+lead_source = {
+    " Referral - Personal": "Referral - Personal",
+    " Referral - S4 Company": "Referral - S4 Company",
 
-    x = str(x)
+    " Inbound - Current Client (DEPRECATED)": "Inbound - Current Client (DEPRECATED)",
+    "inbound - current client (deprecated)": "Inbound - Current Client (DEPRECATED)",
+    "existing client - account/growth activity": "Existing Client - Account/Growth Activity",
+    
+}
 
-    if "Referral" in x:
-        return "Referral"
-    elif "Current Client" in x or "Existing Client" in x:
-        return "Customer Success"
-    elif "Prospecting" in x:
-        return "Outbound"
-    elif "Event" in x:
-        return "Event"
-    elif "Website" in x or "Marketing" in x:
-        return "Inbound"
-    else:
-        return "Unknown"
+df["Lead_Source"] = df["Lead_Source"].replace(lead_source)
+df["Lead_Source"] = df["Lead_Source"].str.strip()
 
-df["Lead_Source_Category"] = df["Lead_Source"].apply(map_lead_source)
+lead_source_map = {
+    # INBOUND
+    "Inbound - Website - Media.Monks (DEPRECATED)": "Inbound",
+    "Inbound - Marketing (DEPRECATED)": "Inbound",
+    "Inbound - Website (DEPRECATED)": "Inbound",
+    "Marketing - Lead Scoring/Nurturing": "Inbound",
+    "Website - Sales Form": "Inbound",
+
+    # OUTBOUND
+    "Prospecting - Personal (DEPRECATED)": "Outbound",
+
+    # REFERRAL
+    "Referral - Internal": "Referral",
+    "Referral - Personal": "Referral",
+    "Referral - S4 Company": "Referral",
+    "Referral - Partner - Google Marketing Platform": "Referral",
+    "Referral - Partner - Google Cloud": "Referral",
+
+    # CUSTOMER SUCCESS
+    "Inbound - Current Client (DEPRECATED)": "Customer Success",
+    "Existing Client - Account/Growth Activity": "Customer Success",
+    "Prospecting - Current Client (DEPRECATED)": "Customer Success",
+
+    # EVENT
+    "Industry Event": "Event",
+
+    # UNKNOWN
+    "MH Lead (DEPRECATED)": "Unknown",
+    "Don't Know/Other (DEPRECATED)": "Unknown"
+}
+
+df["Lead_Source_Category"] = df["Lead_Source"].map(lead_source_map)
+
+# fallback
+df["Lead_Source_Category"] = df["Lead_Source_Category"].fillna("Unknown")
+
+# =========================
+# 2. NORMALIZAR STAGE (LISTA CANÔNICA)
+# =========================
+
+stage_map = {
+    "Clossed Won": "Closed Won",
+    "Closed won": "Closed Won",
+    "closed won": "Closed Won",
+
+    "Qualifyed": "Qualified",
+    "Qualified ": "Qualified",
+
+    "Pithced": "Pitched",
+    "Pitchinng": "Pitching",
+    "Pitched ": "Pitched",
+
+    "Negociation": "Negotiation",
+
+    "Registrationn": "Registration"
+}
+
+df["Stage"] = df["Stage"].replace(stage_map)
+df["Stage"] = df["Stage"].str.strip()
 
 # =========================
 # 5. NORMALIZAR LEAD OFFICE
@@ -93,10 +145,8 @@ df_deals = df.drop_duplicates(subset=["Opportunity_ID"]).copy()
 # 7. DATAS
 # =========================
 
-df_deals["Created_Date"] = pd.to_datetime(df_deals["Created_Date"], errors="coerce")
-df_deals["Close_Date"] = pd.to_datetime(df_deals["Close_Date"], errors="coerce")
-
-df_deals["mes"] = df_deals["Close_Date"].dt.to_period("M").astype(str)
+df_deals["Created_Date"] = pd.to_datetime(df_deals["Created_Date"], errors="coerce").dt.strftime("%d/%m/%Y")
+df_deals["Close_Date"] = pd.to_datetime(df_deals["Close_Date"], errors="coerce").dt.strftime("%d/%m/%Y")
 
 # =========================
 # 8. STATUS (OPEN vs CLOSED)
