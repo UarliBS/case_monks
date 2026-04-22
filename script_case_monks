@@ -1,0 +1,124 @@
+import pandas as pd
+import numpy as np
+
+INPUT_FILE = "opps_corrupted.xlsx"
+OUTPUT_FILE = "opps_corrigido.xlsx"
+
+df = pd.read_excel(INPUT_FILE)
+df.columns = df.columns.str.strip()
+
+# =========================
+# 1. FILTRO DE TYPE
+# =========================
+valid_types = [
+    "Project - Competitive",
+    "Project - Not Competitive",
+    "Change Order/Upsell"
+]
+
+df = df[df["Type"].isin(valid_types)]
+
+# =========================
+# 2. CORRIGIR CAMPOS NUMÉRICOS
+# =========================
+
+# Corrigir Amount (string -> float)
+df["Amount"] = (
+    df["Amount"]
+    .astype(str)
+    .str.replace(".", "", regex=False)
+    .str.replace(",", ".", regex=False)
+)
+
+df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
+
+# Corrigir Total_Product_Amount
+df["Total_Product_Amount"] = pd.to_numeric(
+    df["Total_Product_Amount"], errors="coerce"
+)
+
+# =========================
+# 3. CORRIGIR AMOUNT (REGRA DO CASE)
+# =========================
+
+df["Amount_corrigido"] = df.groupby("Opportunity_ID")["Total_Product_Amount"].transform(
+    lambda x: x.sum() if x.notna().any() else np.nan
+)
+
+# =========================
+# 4. NORMALIZAR LEAD SOURCE (ORDEM CORRETA)
+# =========================
+
+def map_lead_source(x):
+    if pd.isna(x):
+        return "Unknown"
+
+    x = str(x)
+
+    if "Referral" in x:
+        return "Referral"
+    elif "Current Client" in x or "Existing Client" in x:
+        return "Customer Success"
+    elif "Prospecting" in x:
+        return "Outbound"
+    elif "Event" in x:
+        return "Event"
+    elif "Website" in x or "Marketing" in x:
+        return "Inbound"
+    else:
+        return "Unknown"
+
+df["Lead_Source_Category"] = df["Lead_Source"].apply(map_lead_source)
+
+# =========================
+# 5. NORMALIZAR LEAD OFFICE
+# =========================
+
+df["Lead_Office"] = df["Lead_Office"].replace({
+    "São Paulo": "Sao Paulo, BR",
+    "Sao Paulo": "Sao Paulo, BR",
+    "Sao Carlos": "Sao Carlos, BR",
+    "Votorantim": "Votorantim, BR"
+})
+
+# =========================
+# 6. REMOVER DUPLICIDADE (NÍVEL DEAL)
+# =========================
+
+df_deals = df.drop_duplicates(subset=["Opportunity_ID"]).copy()
+
+# =========================
+# 7. DATAS
+# =========================
+
+df_deals["Created_Date"] = pd.to_datetime(df_deals["Created_Date"], errors="coerce")
+df_deals["Close_Date"] = pd.to_datetime(df_deals["Close_Date"], errors="coerce")
+
+df_deals["mes"] = df_deals["Close_Date"].dt.to_period("M").astype(str)
+
+# =========================
+# 8. STATUS (OPEN vs CLOSED)
+# =========================
+
+df_deals["Status"] = np.where(
+    df_deals["Stage"] == "Closed Won", "Closed Won", "Open"
+)
+
+# =========================
+# 9. SANITY CHECKS (IMPORTANTE)
+# =========================
+
+# Closed Won não pode ter valor nulo
+df_deals.loc[
+    (df_deals["Status"] == "Closed Won") &
+    (df_deals["Amount_corrigido"].isna()),
+    "Amount_corrigido"
+] = np.nan  # mantém como NaN (para filtrar depois)
+
+# =========================
+# 10. EXPORT
+# =========================
+
+df_deals.to_excel(OUTPUT_FILE, index=False)
+
+print("✅ Limpeza concluída com sucesso!")
