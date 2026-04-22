@@ -75,6 +75,8 @@ df["Lead_Source_Category"] = df["Lead_Source"].apply(map_lead_source)
 # =========================
 
 df["Lead_Office"] = df["Lead_Office"].replace({
+    "sao paulo": "Sao Paulo, BR",
+    "SP": "Sao Paulo, BR",
     "São Paulo": "Sao Paulo, BR",
     "Sao Paulo": "Sao Paulo, BR",
     "Sao Carlos": "Sao Carlos, BR",
