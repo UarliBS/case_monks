@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatório de Erros - Case Monks</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --surface: #fffdf8;
+      --ink: #1f2933;
+      --muted: #596579;
+      --line: #d8d2c3;
+      --brand: #0f766e;
+      --accent: #b45309;
+      --soft: #e7f7f5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 24%),
+        linear-gradient(180deg, #faf7f0 0%, var(--bg) 100%);
+    }
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 20px 56px;
+    }
+    .hero {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 16px 40px rgba(31, 41, 51, 0.08);
+    }
+    h1, h2, h3 { margin-top: 0; }
+    h1 { font-size: 2rem; margin-bottom: 12px; }
+    p { line-height: 1.6; }
+    .muted { color: var(--muted); }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .kpi {
+      background: linear-gradient(180deg, #ffffff, #f8fcfb);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+    }
+    .kpi .value {
+      display: block;
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: var(--brand);
+    }
+    .summary-card, .problem-card {
+      margin-top: 24px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 12px 32px rgba(31, 41, 51, 0.06);
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--brand);
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.94rem;
+      background: #ffffff;
+    }
+    .data-table th,
+    .data-table td {
+      border: 1px solid #e4ddcf;
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .data-table th {
+      background: #f5efe2;
+      font-weight: 700;
+    }
+    .table-wrapper {
+      margin-top: 18px;
+      overflow-x: auto;
+    }
+    .note {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent);
+      background: #fff6eb;
+      border-radius: 12px;
+    }
+    .empty-state {
+      color: var(--muted);
+      margin: 0;
+    }
+    code {
+      background: #f1ede3;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-family: Consolas, monospace;
+      font-size: 0.92em;
+    }
+    @media (max-width: 720px) {
+      .page { padding: 20px 14px 40px; }
+      .hero, .summary-card, .problem-card { padding: 20px; border-radius: 18px; }
+      h1 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>Relatório de erros e correções da planilha <code>opps_corrupted.xlsx</code></h1>
+      <p>
+        O arquivo original tinha problemas que afetariam tanto a contagem de oportunidades quanto a leitura de
+        valores e categorias. A limpeza abaixo foi feita pensando em alguém não-técnico: a ideia foi separar o que
+        está fora do escopo, padronizar nomes, transformar textos em números confiáveis e criar uma visão por deal
+        para evitar contagem em dobro.
+      </p>
+      <p class="muted">
+        Resumo em uma frase: a base recebida tinha 413 linhas de produto, mas a versão tratada ficou com
+        305 linhas no escopo analítico e 203 oportunidades únicas prontas para análise.
+      </p>
+      <div class="kpis">
+        <div class="kpi"><span class="value">413</span>linhas recebidas</div>
+        <div class="kpi"><span class="value">305</span>linhas válidas no escopo</div>
+        <div class="kpi"><span class="value">203</span>deals únicos</div>
+        <div class="kpi"><span class="value">5</span>categorias de problema</div>
+      </div>
+    </section>
+
+    <section class="summary-card">
+      <div class="section-header">
+        <h2>Resumo Executivo</h2>
+        <span class="pill">108 linhas excluídas por escopo</span>
+      </div>
+      <p>
+        Os principais problemas encontrados foram: linhas fora do escopo do case, repetição de oportunidades por causa
+        da granularidade de produto, campos categóricos fora do padrão, valores monetários armazenados como texto e
+        divergências entre o valor total do deal e a soma dos produtos.
+      </p>
+      <table border="1" class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Categoria</th>
+      <th>Linhas_Afetadas</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Registros fora do escopo da análise</td>
+      <td>108</td>
+    </tr>
+    <tr>
+      <td>Duplicidade aparente por granularidade de produto</td>
+      <td>231</td>
+    </tr>
+    <tr>
+      <td>Campos categóricos com grafia ou formatação fora do padrão</td>
+      <td>49</td>
+    </tr>
+    <tr>
+      <td>Campos numéricos armazenados em formatos inconsistentes</td>
+      <td>389</td>
+    </tr>
+    <tr>
+      <td>Divergência entre `Amount` e soma dos produtos</td>
+      <td>10</td>
+    </tr>
+  </tbody>
+</table>
+      <div class="note">
+        21 linhas em <code>Opportunity Identified</code> ou <code>Qualified</code> ficaram sem valor e sem produto,
+        e isso <strong>não</strong> foi tratado como erro porque o próprio brief diz que esse comportamento é esperado nesses estágios.
+      </div>
+    </section>
+
+    
+        <section class="problem-card" id="escopo">
+          <div class="section-header">
+            <h2>Registros fora do escopo da análise</h2>
+            <span class="pill">108 linhas afetadas</span>
+          </div>
+          <p><strong>O que isso significa:</strong> O case pede para considerar somente três tipos de oportunidade. Tudo o que estava fora dessa lista foi separado para não contaminar as análises.</p>
+          <p><strong>Impacto:</strong> 108 linhas saíram da base analítica. Os tipos removidos foram: Flex/Renewal, Passthrough, Retainer.</p>
+          <p><strong>O que foi feito:</strong> Mantive esses registros na aba `registros_excluidos` para auditoria e removi essas linhas da base corrigida usada nas análises.</p>
+          <div class="table-wrapper">
+            <h3>Exemplos reais da planilha</h3>
+            <table border="1" class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Source_Row_Number</th>
+      <th>Opportunity_ID</th>
+      <th>Type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>11</td>
+      <td>OPP-10008</td>
+      <td>Flex/Renewal</td>
+    </tr>
+    <tr>
+      <td>12</td>
+      <td>OPP-10008</td>
+      <td>Flex/Renewal</td>
+    </tr>
+    <tr>
+      <td>13</td>
+      <td>OPP-10008</td>
+      <td>Flex/Renewal</td>
+    </tr>
+    <tr>
+      <td>14</td>
+      <td>OPP-10008</td>
+      <td>Flex/Renewal</td>
+    </tr>
+    <tr>
+      <td>15</td>
+      <td>OPP-10009</td>
+      <td>Flex/Renewal</td>
+    </tr>
+    <tr>
+      <td>22</td>
+      <td>OPP-10015</td>
+      <td>Flex/Renewal</td>
+    </tr>
+    <tr>
+      <td>29</td>
+      <td>OPP-10021</td>
+      <td>Flex/Renewal</td>
+    </tr>
+    <tr>
+      <td>30</td>
+      <td>OPP-10021</td>
+      <td>Flex/Renewal</td>
+    </tr>
+  </tbody>
+</table>
+          </div>
+        </section>
+        
+
+        <section class="problem-card" id="duplicidade">
+          <div class="section-header">
+            <h2>Duplicidade aparente por granularidade de produto</h2>
+            <span class="pill">231 linhas afetadas</span>
+          </div>
+          <p><strong>O que isso significa:</strong> A planilha original veio em nível de produto. Isso faz o mesmo deal aparecer em várias linhas e pode inflar contagens se a análise for feita diretamente no bruto.</p>
+          <p><strong>Impacto:</strong> 231 linhas tinham `Opportunity_ID` repetido, representando 79 oportunidades. Depois da deduplicação analítica, a base ficou com 203 deals únicos.</p>
+          <p><strong>O que foi feito:</strong> Mantive a visão por produto na aba `base_produto_corrigida` e criei uma aba `deals_unicos` com uma linha por oportunidade para evitar contagem em dobro.</p>
+          <div class="table-wrapper">
+            <h3>Exemplos reais da planilha</h3>
+            <table border="1" class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Opportunity_ID</th>
+      <th>Row_Count</th>
+      <th>Type</th>
+      <th>Products</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>OPP-10110</td>
+      <td>6</td>
+      <td>Change Order/Upsell</td>
+      <td>DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Media - Managed Media (AOR) | DDM - Media - Creative | Content - Social - AOR</td>
+    </tr>
+    <tr>
+      <td>OPP-10050</td>
+      <td>5</td>
+      <td>Project - Competitive</td>
+      <td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Media - Managed Media (AOR) | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Media - Creative | DDM - Data - Services &amp; Tech - Services (Data Science/Data Eng.)</td>
+    </tr>
+    <tr>
+      <td>OPP-10058</td>
+      <td>5</td>
+      <td>Project - Competitive</td>
+      <td>Content - Social - AOR | DDM - Commerce - Content | DDM - Media - Creative | DDM - Media - Managed Media (AOR) | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support)</td>
+    </tr>
+    <tr>
+      <td>OPP-10072</td>
+      <td>5</td>
+      <td>Flex/Renewal</td>
+      <td>DDM - Media - Managed Media (AOR) | Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Media - Creative | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support)</td>
+    </tr>
+    <tr>
+      <td>OPP-10099</td>
+      <td>5</td>
+      <td>Project - Competitive</td>
+      <td>DDM - Media - Managed Media (AOR) | Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Data - Services &amp; Tech - Services (Data Science/Data Eng.) | Content - Platform - Service &amp; Maintenance | DDM - CRM - Other</td>
+    </tr>
+  </tbody>
+</table>
+          </div>
+        </section>
+        
+
+        <section class="problem-card" id="categoricos">
+          <div class="section-header">
+            <h2>Campos categóricos com grafia ou formatação fora do padrão</h2>
+            <span class="pill">49 linhas afetadas</span>
+          </div>
+          <p><strong>O que isso significa:</strong> Havia variações de caixa alta/baixa, espaços extras, acentos, abreviações e erros de digitação em `Lead_Source`, `Stage` e `Lead_Office`. Isso quebra agrupamentos e pode dividir a mesma categoria em várias.</p>
+          <p><strong>Impacto:</strong> 49 linhas tinham pelo menos um campo categórico fora da lista canônica. Quebra por campo: Lead_Source = 20, Stage = 12, Lead_Office = 18.</p>
+          <p><strong>O que foi feito:</strong> Normalizei os valores usando as listas canônicas do brief, corrigi aliases/typos e criei a coluna `Lead_Source_Category` com a taxonomia de 6 grupos pedida no case.</p>
+          <div class="table-wrapper">
+            <h3>Exemplos reais da planilha</h3>
+            <table border="1" class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Source_Row_Number</th>
+      <th>Opportunity_ID</th>
+      <th>Campo</th>
+      <th>Valor_Original</th>
+      <th>Valor_Corrigido</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>11</td>
+      <td>OPP-10008</td>
+      <td>Lead_Source</td>
+      <td>inbound - current client (deprecated)</td>
+      <td>Inbound - Current Client (DEPRECATED)</td>
+    </tr>
+    <tr>
+      <td>28</td>
+      <td>OPP-10020</td>
+      <td>Lead_Source</td>
+      <td>inbound - current client (deprecated)</td>
+      <td>Inbound - Current Client (DEPRECATED)</td>
+    </tr>
+    <tr>
+      <td>41</td>
+      <td>OPP-10027</td>
+      <td>Lead_Source</td>
+      <td>inbound - website - media.monks (DEPRECATED)</td>
+      <td>Inbound - Website - Media.Monks (DEPRECATED)</td>
+    </tr>
+    <tr>
+      <td>45</td>
+      <td>OPP-10029</td>
+      <td>Lead_Source</td>
+      <td>inbound - current client (deprecated)</td>
+      <td>Inbound - Current Client (DEPRECATED)</td>
+    </tr>
+    <tr>
+      <td>65</td>
+      <td>OPP-10039</td>
+      <td>Lead_Source</td>
+      <td>Don&#x27;t Know-Other</td>
+      <td>Don&#x27;t Know/Other (DEPRECATED)</td>
+    </tr>
+    <tr>
+      <td>91</td>
+      <td>OPP-10050</td>
+      <td>Lead_Source</td>
+      <td>REFERRAL - INTERNAL</td>
+      <td>Referral - Internal</td>
+    </tr>
+    <tr>
+      <td>117</td>
+      <td>OPP-10060</td>
+      <td>Lead_Source</td>
+      <td>Don&#x27;t Know-Other</td>
+      <td>Don&#x27;t Know/Other (DEPRECATED)</td>
+    </tr>
+    <tr>
+      <td>119</td>
+      <td>OPP-10061</td>
+      <td>Lead_Source</td>
+      <td>Inbound - Current Client (DEPRECATED)</td>
+      <td>Inbound - Current Client (DEPRECATED)</td>
+    </tr>
+    <tr>
+      <td>13</td>
+      <td>OPP-10008</td>
+      <td>Stage</td>
+      <td>Closed Wonn</td>
+      <td>Closed Won</td>
+    </tr>
+    <tr>
+      <td>48</td>
+      <td>OPP-10031</td>
+      <td>Stage</td>
+      <td>Clossed Won</td>
+      <td>Closed Won</td>
+    </tr>
+    <tr>
+      <td>99</td>
+      <td>OPP-10052</td>
+      <td>Stage</td>
+      <td>Clossed Won</td>
+      <td>Closed Won</td>
+    </tr>
+    <tr>
+      <td>103</td>
+      <td>OPP-10054</td>
+      <td>Stage</td>
+      <td>Clossed Won</td>
+      <td>Closed Won</td>
+    </tr>
+    <tr>
+      <td>203</td>
+      <td>OPP-10115</td>
+      <td>Stage</td>
+      <td>Qualifyed</td>
+      <td>Qualified</td>
+    </tr>
+    <tr>
+      <td>217</td>
+      <td>OPP-10124</td>
+      <td>Stage</td>
+      <td>Pitchinng</td>
+      <td>Pitching</td>
+    </tr>
+    <tr>
+      <td>268</td>
+      <td>OPP-10159</td>
+      <td>Stage</td>
+      <td>Pithced</td>
+      <td>Pitched</td>
+    </tr>
+    <tr>
+      <td>302</td>
+      <td>OPP-10173</td>
+      <td>Stage</td>
+      <td>Pithced</td>
+      <td>Pitched</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>OPP-10002</td>
+      <td>Lead_Office</td>
+      <td>São Paulo</td>
+      <td>Sao Paulo, BR</td>
+    </tr>
+    <tr>
+      <td>48</td>
+      <td>OPP-10031</td>
+      <td>Lead_Office</td>
+      <td>SP</td>
+      <td>Sao Paulo, BR</td>
+    </tr>
+    <tr>
+      <td>49</td>
+      <td>OPP-10031</td>
+      <td>Lead_Office</td>
+      <td>SAO PAULO</td>
+      <td>Sao Paulo, BR</td>
+    </tr>
+    <tr>
+      <td>62</td>
+      <td>OPP-10037</td>
+      <td>Lead_Office</td>
+      <td>São Paulo</td>
+      <td>Sao Paulo, BR</td>
+    </tr>
+    <tr>
+      <td>132</td>
+      <td>OPP-10069</td>
+      <td>Lead_Office</td>
+      <td>SP</td>
+      <td>Sao Paulo, BR</td>
+    </tr>
+    <tr>
+      <td>143</td>
+      <td>OPP-10074</td>
+      <td>Lead_Office</td>
+      <td>sp</td>
+      <td>Sao Paulo, BR</td>
+    </tr>
+    <tr>
+      <td>211</td>
+      <td>OPP-10121</td>
+      <td>Lead_Office</td>
+      <td>São Paulo</td>
+      <td>Sao Paulo, BR</td>
+    </tr>
+    <tr>
+      <td>223</td>
+      <td>OPP-10129</td>
+      <td>Lead_Office</td>
+      <td>sao paulo</td>
+      <td>Sao Paulo, BR</td>
+    </tr>
+  </tbody>
+</table>
+          </div>
+        </section>
+        
+
+        <section class="problem-card" id="numericos">
+          <div class="section-header">
+            <h2>Campos numéricos armazenados em formatos inconsistentes</h2>
+            <span class="pill">389 linhas afetadas</span>
+          </div>
+          <p><strong>O que isso significa:</strong> Os campos monetários estavam misturando texto, números e separadores diferentes. Sem padronização, isso pode causar soma errada, ordenação incorreta e leituras equivocadas de valor.</p>
+          <p><strong>Impacto:</strong> 389 linhas tinham `Amount` ou `Total_Product_Amount` salvos como texto; em 268 delas havia vírgula ou formatação mista de milhar/decimal.</p>
+          <p><strong>O que foi feito:</strong> Convertemos os dois campos para número de forma robusta, preservando casos legítimos em branco nos estágios `Opportunity Identified` e `Qualified`.</p>
+          <div class="table-wrapper">
+            <h3>Exemplos reais da planilha</h3>
+            <table border="1" class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Source_Row_Number</th>
+      <th>Opportunity_ID</th>
+      <th>Amount_Original</th>
+      <th>Total_Product_Amount_Original</th>
+      <th>Amount_Corrigido</th>
+      <th>Total_Product_Amount_Corrigido</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2</td>
+      <td>OPP-10001</td>
+      <td>3.043.949,95</td>
+      <td>829.077,09</td>
+      <td>3.043.949,95</td>
+      <td>829.077,09</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>OPP-10001</td>
+      <td>3.043.949,95</td>
+      <td>1.475.924,60</td>
+      <td>3.043.949,95</td>
+      <td>1.475.924,60</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>OPP-10001</td>
+      <td>3.043.949,95</td>
+      <td>738.948,26</td>
+      <td>3.043.949,95</td>
+      <td>738.948,26</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>OPP-10002</td>
+      <td>85.000,00</td>
+      <td>85.000,00</td>
+      <td>85.000,00</td>
+      <td>85000</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>OPP-10003</td>
+      <td>40.000,00</td>
+      <td>40.000,00</td>
+      <td>40.000,00</td>
+      <td>40000</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>OPP-10004</td>
+      <td>32.226,34</td>
+      <td>32.226,34</td>
+      <td>32.226,34</td>
+      <td>32.226,34</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>OPP-10005</td>
+      <td>30.000,00</td>
+      <td>30.000,00</td>
+      <td>30.000,00</td>
+      <td>30000</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td>OPP-10006</td>
+      <td>64.258,47</td>
+      <td>64.258,47</td>
+      <td>64.258,47</td>
+      <td>64.258,47</td>
+    </tr>
+  </tbody>
+</table>
+          </div>
+        </section>
+        
+
+        <section class="problem-card" id="amount">
+          <div class="section-header">
+            <h2>Divergência entre `Amount` e soma dos produtos</h2>
+            <span class="pill">10 linhas afetadas</span>
+          </div>
+          <p><strong>O que isso significa:</strong> Em alguns deals, o valor total da oportunidade não batia com a soma dos produtos. O próprio brief define que, nesses casos, a soma de `Total_Product_Amount` é a fonte da verdade.</p>
+          <p><strong>Impacto:</strong> 10 linhas no escopo tinham esse problema, equivalentes a 10 oportunidades.</p>
+          <p><strong>O que foi feito:</strong> Substituí o `Amount` pelo total consolidado de produtos e sinalizei o ajuste na coluna `Amount_Was_Reconciled`.</p>
+          <div class="table-wrapper">
+            <h3>Exemplos reais da planilha</h3>
+            <table border="1" class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Opportunity_ID</th>
+      <th>Source_Row_Number</th>
+      <th>Amount_Original</th>
+      <th>Amount_Corrigido</th>
+      <th>Soma_dos_Produtos</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>OPP-10030</td>
+      <td>47</td>
+      <td>290.400,00</td>
+      <td>645.420,00</td>
+      <td>645.420,00</td>
+    </tr>
+    <tr>
+      <td>OPP-10081</td>
+      <td>152</td>
+      <td>150.000,00</td>
+      <td>120.000,00</td>
+      <td>120.000,00</td>
+    </tr>
+    <tr>
+      <td>OPP-10089</td>
+      <td>161</td>
+      <td>728.000,00</td>
+      <td>520.000,00</td>
+      <td>520.000,00</td>
+    </tr>
+    <tr>
+      <td>OPP-10092</td>
+      <td>167</td>
+      <td>295.200,00</td>
+      <td>492.000,00</td>
+      <td>492.000,00</td>
+    </tr>
+    <tr>
+      <td>OPP-10097</td>
+      <td>172</td>
+      <td>1.974.000,00</td>
+      <td>1.410.000,00</td>
+      <td>1.410.000,00</td>
+    </tr>
+    <tr>
+      <td>OPP-10111</td>
+      <td>198</td>
+      <td>67.500,00</td>
+      <td>90.000,00</td>
+      <td>90.000,00</td>
+    </tr>
+    <tr>
+      <td>OPP-10126</td>
+      <td>219</td>
+      <td>375.000,00</td>
+      <td>300.000,00</td>
+      <td>300.000,00</td>
+    </tr>
+    <tr>
+      <td>OPP-10151</td>
+      <td>256</td>
+      <td>1.000,00</td>
+      <td>420,00</td>
+      <td>420,00</td>
+    </tr>
+  </tbody>
+</table>
+          </div>
+        </section>
+        
+  </main>
+</body>
+</html>

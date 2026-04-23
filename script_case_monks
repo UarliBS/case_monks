@@ -1,176 +1,851 @@
-import pandas as pd
+from __future__ import annotations
+
+import html
+import os
+import re
+import unicodedata
+from pathlib import Path
+
 import numpy as np
+import pandas as pd
+from openpyxl.styles import Font, PatternFill
 
-INPUT_FILE = "opps_corrupted.xlsx"
-OUTPUT_FILE = "opps_corrigido.xlsx"
 
-df = pd.read_excel(INPUT_FILE)
-df.columns = df.columns.str.strip()
+BASE_DIR = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
+INPUT_FILE = BASE_DIR / "opps_corrupted.xlsx"
+OUTPUT_XLSX = BASE_DIR / os.environ.get("OUTPUT_XLSX_NAME", "opps_corrigido.xlsx")
+OUTPUT_HTML = BASE_DIR / os.environ.get("OUTPUT_HTML_NAME", "relatorio_erros.html")
 
-# =========================
-# 1. FILTRO DE TYPE
-# =========================
-valid_types = [
+VALID_TYPES = [
     "Project - Competitive",
     "Project - Not Competitive",
-    "Change Order/Upsell"
+    "Change Order/Upsell",
 ]
 
-df = df[df["Type"].isin(valid_types)]
+EARLY_STAGES = {"Opportunity Identified", "Qualified"}
 
-# =========================
-# 2. CORRIGIR CAMPOS NUMÉRICOS
-# =========================
+CANONICAL_STAGES = [
+    "Opportunity Identified",
+    "Qualified",
+    "Registration",
+    "Pitching",
+    "Pitched",
+    "Negotiation",
+    "Closed Won",
+]
 
-# Corrigir Amount (string -> float)
-df["Amount"] = (
-    df["Amount"]
-    .astype(str)
-    .str.replace(".", "", regex=False)
-    .str.replace(",", ".", regex=False)
-)
+CANONICAL_LEAD_OFFICES = [
+    "Sao Carlos, BR",
+    "Votorantim, BR",
+    "Sao Paulo, BR",
+]
 
-df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
+CANONICAL_LEAD_SOURCES = [
+    "Inbound - Current Client (DEPRECATED)",
+    "Inbound - Website - Media.Monks (DEPRECATED)",
+    "Inbound - Marketing (DEPRECATED)",
+    "Inbound - Website (DEPRECATED)",
+    "Marketing - Lead Scoring/Nurturing",
+    "Website - Sales Form",
+    "Prospecting - Personal (DEPRECATED)",
+    "Prospecting - Current Client (DEPRECATED)",
+    "Referral - Internal",
+    "Referral - Personal",
+    "Referral - S4 Company",
+    "Referral - Partner - Google Marketing Platform",
+    "Referral - Partner - Google Cloud",
+    "Existing Client - Account/Growth Activity",
+    "Industry Event",
+    "MH Lead (DEPRECATED)",
+    "Don't Know/Other (DEPRECATED)",
+]
 
-# Corrigir Total_Product_Amount
-df["Total_Product_Amount"] = pd.to_numeric(
-    df["Total_Product_Amount"], errors="coerce"
-)
-
-# =========================
-# 3. CORRIGIR AMOUNT (REGRA DO CASE)
-# =========================
-
-df["Amount_corrigido"] = df.groupby("Opportunity_ID")["Total_Product_Amount"].transform(
-    lambda x: x.sum() if x.notna().any() else np.nan
-)
-
-# =========================
-# 4. NORMALIZAR LEAD SOURCE (ORDEM CORRETA)
-# =========================
-
-lead_source = {
-    " Referral - Personal": "Referral - Personal",
-    " Referral - S4 Company": "Referral - S4 Company",
-
-    " Inbound - Current Client (DEPRECATED)": "Inbound - Current Client (DEPRECATED)",
-    "inbound - current client (deprecated)": "Inbound - Current Client (DEPRECATED)",
-    "existing client - account/growth activity": "Existing Client - Account/Growth Activity",
-    
-}
-
-df["Lead_Source"] = df["Lead_Source"].replace(lead_source)
-df["Lead_Source"] = df["Lead_Source"].str.strip()
-
-lead_source_map = {
-    # INBOUND
+LEAD_SOURCE_CATEGORY_MAP = {
     "Inbound - Website - Media.Monks (DEPRECATED)": "Inbound",
     "Inbound - Marketing (DEPRECATED)": "Inbound",
     "Inbound - Website (DEPRECATED)": "Inbound",
     "Marketing - Lead Scoring/Nurturing": "Inbound",
     "Website - Sales Form": "Inbound",
-
-    # OUTBOUND
     "Prospecting - Personal (DEPRECATED)": "Outbound",
-
-    # REFERRAL
     "Referral - Internal": "Referral",
     "Referral - Personal": "Referral",
     "Referral - S4 Company": "Referral",
     "Referral - Partner - Google Marketing Platform": "Referral",
     "Referral - Partner - Google Cloud": "Referral",
-
-    # CUSTOMER SUCCESS
     "Inbound - Current Client (DEPRECATED)": "Customer Success",
     "Existing Client - Account/Growth Activity": "Customer Success",
     "Prospecting - Current Client (DEPRECATED)": "Customer Success",
-
-    # EVENT
     "Industry Event": "Event",
-
-    # UNKNOWN
     "MH Lead (DEPRECATED)": "Unknown",
-    "Don't Know/Other (DEPRECATED)": "Unknown"
+    "Don't Know/Other (DEPRECATED)": "Unknown",
 }
 
-df["Lead_Source_Category"] = df["Lead_Source"].map(lead_source_map)
-
-# fallback
-df["Lead_Source_Category"] = df["Lead_Source_Category"].fillna("Unknown")
-
-# =========================
-# 2. NORMALIZAR STAGE (LISTA CANÔNICA)
-# =========================
-
-stage_map = {
-    "Clossed Won": "Closed Won",
-    "Closed won": "Closed Won",
-    "closed won": "Closed Won",
-
-    "Qualifyed": "Qualified",
-    "Qualified ": "Qualified",
-
-    "Pithced": "Pitched",
-    "Pitchinng": "Pitching",
-    "Pitched ": "Pitched",
-
-    "Negociation": "Negotiation",
-
-    "Registrationn": "Registration"
+LEAD_SOURCE_ALIASES = {
+    "refferal - internal": "Referral - Internal",
+    "don't know-other": "Don't Know/Other (DEPRECATED)",
 }
 
-df["Stage"] = df["Stage"].replace(stage_map)
-df["Stage"] = df["Stage"].str.strip()
+STAGE_ALIASES = {
+    "clossed won": "Closed Won",
+    "closed wonn": "Closed Won",
+    "qualifyed": "Qualified",
+    "pithced": "Pitched",
+    "pitchinng": "Pitching",
+    "negociation": "Negotiation",
+    "registrationn": "Registration",
+}
 
-# =========================
-# 5. NORMALIZAR LEAD OFFICE
-# =========================
-
-df["Lead_Office"] = df["Lead_Office"].replace({
+LEAD_OFFICE_ALIASES = {
     "sao paulo": "Sao Paulo, BR",
-    "SP": "Sao Paulo, BR",
-    "São Paulo": "Sao Paulo, BR",
-    "Sao Paulo": "Sao Paulo, BR",
-    "Sao Carlos": "Sao Carlos, BR",
-    "Votorantim": "Votorantim, BR"
-})
+    "sp": "Sao Paulo, BR",
+}
 
-# =========================
-# 6. REMOVER DUPLICIDADE (NÍVEL DEAL)
-# =========================
 
-df_deals = df.drop_duplicates(subset=["Opportunity_ID"]).copy()
+def normalize_token(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    text = str(value).strip()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = text.casefold()
+    text = re.sub(r"\s*-\s*", " - ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
-# =========================
-# 7. DATAS
-# =========================
 
-df_deals["Created_Date"] = pd.to_datetime(df_deals["Created_Date"], errors="coerce").dt.strftime("%d/%m/%Y")
-df_deals["Close_Date"] = pd.to_datetime(df_deals["Close_Date"], errors="coerce").dt.strftime("%d/%m/%Y")
+def build_lookup(canonical_values: list[str], aliases: dict[str, str] | None = None) -> dict[str, str]:
+    lookup = {normalize_token(value): value for value in canonical_values}
+    for raw_value, canonical_value in (aliases or {}).items():
+        lookup[normalize_token(raw_value)] = canonical_value
+    return lookup
 
-# =========================
-# 8. STATUS (OPEN vs CLOSED)
-# =========================
 
-df_deals["Status"] = np.where(
-    df_deals["Stage"] == "Closed Won", "Closed Won", "Open"
-)
+LEAD_SOURCE_LOOKUP = build_lookup(CANONICAL_LEAD_SOURCES, LEAD_SOURCE_ALIASES)
+STAGE_LOOKUP = build_lookup(CANONICAL_STAGES, STAGE_ALIASES)
+LEAD_OFFICE_LOOKUP = build_lookup(CANONICAL_LEAD_OFFICES, LEAD_OFFICE_ALIASES)
 
-# =========================
-# 9. SANITY CHECKS (IMPORTANTE)
-# =========================
 
-# Closed Won não pode ter valor nulo
-df_deals.loc[
-    (df_deals["Status"] == "Closed Won") &
-    (df_deals["Amount_corrigido"].isna()),
-    "Amount_corrigido"
-] = np.nan  # mantém como NaN (para filtrar depois)
+def normalize_series(series: pd.Series, lookup: dict[str, str]) -> pd.Series:
+    def _normalize(value: object) -> object:
+        if pd.isna(value):
+            return np.nan
+        return lookup.get(normalize_token(value), str(value).strip())
 
-# =========================
-# 10. EXPORT
-# =========================
+    return series.map(_normalize)
 
-df_deals.to_excel(OUTPUT_FILE, index=False)
 
-print("✅ Limpeza concluída com sucesso!")
+def parse_number(value: object) -> float:
+    if pd.isna(value):
+        return np.nan
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return float(value)
+
+    text = re.sub(r"[^\d,.\-]", "", str(value).strip())
+    if not text or text in {"-", ".", ","}:
+        return np.nan
+
+    if re.fullmatch(r"-?\d{1,3}(?:\.\d{3})+(?:,\d+)?", text):
+        text = text.replace(".", "")
+        text = text.replace(",", ".")
+    elif re.fullmatch(r"-?\d{1,3}(?:,\d{3})+(?:\.\d+)?", text):
+        text = text.replace(",", "")
+    elif re.fullmatch(r"-?\d+,\d+", text):
+        text = text.replace(",", ".")
+
+    try:
+        return float(text)
+    except ValueError:
+        return np.nan
+
+
+def first_not_blank(series: pd.Series) -> object:
+    for value in series:
+        if pd.isna(value):
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        return value
+    return np.nan
+
+
+def join_unique_values(series: pd.Series) -> str:
+    values: list[str] = []
+    for value in series.dropna():
+        text = str(value).strip()
+        if text and text not in values:
+            values.append(text)
+    return " | ".join(values)
+
+
+def format_brl_number(value: object, decimals: int = 2) -> str:
+    if pd.isna(value):
+        return "—"
+    number = float(value)
+    formatted = f"{number:,.{decimals}f}"
+    return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_html_value(value: object, column: str) -> str:
+    if pd.isna(value):
+        return "—"
+    if isinstance(value, pd.Timestamp):
+        return value.strftime("%d/%m/%Y")
+    if column in {
+        "Amount",
+        "Amount_Original",
+        "Total_Product_Amount",
+        "Total_Product_Amount_Original",
+        "Soma_dos_Produtos",
+        "Amount_Corrigido",
+    }:
+        if isinstance(value, str):
+            parsed = parse_number(value)
+            return html.escape(value) if pd.isna(parsed) else format_brl_number(parsed)
+        return format_brl_number(value)
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, (float, np.floating)):
+        if float(value).is_integer():
+            return str(int(value))
+        return format_brl_number(value)
+    return html.escape(str(value))
+
+
+def dataframe_to_html_table(df: pd.DataFrame) -> str:
+    if df.empty:
+        return "<p class='empty-state'>Nenhum exemplo adicional foi necessário para esta categoria.</p>"
+
+    formatted = df.copy()
+    for column in formatted.columns:
+        formatted[column] = formatted[column].map(lambda value: format_html_value(value, column))
+    return formatted.to_html(index=False, escape=False, classes="data-table")
+
+
+def prepare_raw_data() -> pd.DataFrame:
+    raw_df = pd.read_excel(INPUT_FILE)
+    raw_df.columns = raw_df.columns.str.strip()
+    raw_df.insert(0, "Source_Row_Number", np.arange(2, len(raw_df) + 2))
+    return raw_df
+
+
+def build_clean_dataframes(
+    raw_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, pd.Series]]:
+    clean_df = raw_df.copy()
+
+    clean_df["Amount_Original"] = clean_df["Amount"]
+    clean_df["Total_Product_Amount_Original"] = clean_df["Total_Product_Amount"]
+    clean_df["Lead_Source_Original"] = clean_df["Lead_Source"]
+    clean_df["Stage_Original"] = clean_df["Stage"]
+    clean_df["Lead_Office_Original"] = clean_df["Lead_Office"]
+
+    clean_df["Lead_Source"] = normalize_series(clean_df["Lead_Source"], LEAD_SOURCE_LOOKUP)
+    clean_df["Stage"] = normalize_series(clean_df["Stage"], STAGE_LOOKUP)
+    clean_df["Lead_Office"] = normalize_series(clean_df["Lead_Office"], LEAD_OFFICE_LOOKUP)
+    clean_df["Lead_Source_Category"] = clean_df["Lead_Source"].map(LEAD_SOURCE_CATEGORY_MAP).fillna("Unknown")
+
+    clean_df["Amount"] = clean_df["Amount"].map(parse_number)
+    clean_df["Total_Product_Amount"] = clean_df["Total_Product_Amount"].map(parse_number)
+    clean_df["Created_Date"] = pd.to_datetime(clean_df["Created_Date"], errors="coerce", dayfirst=True)
+    clean_df["Close_Date"] = pd.to_datetime(clean_df["Close_Date"], errors="coerce", dayfirst=True)
+
+    issue_masks = {
+        "out_of_scope": ~raw_df["Type"].isin(VALID_TYPES),
+        "duplicate_rows": raw_df.duplicated(subset=["Opportunity_ID"], keep=False),
+        "lead_source_issue": ~raw_df["Lead_Source"].isin(CANONICAL_LEAD_SOURCES),
+        "stage_issue": ~raw_df["Stage"].isin(CANONICAL_STAGES),
+        "lead_office_issue": ~raw_df["Lead_Office"].isin(CANONICAL_LEAD_OFFICES),
+        "categorical_issue": (
+            ~raw_df["Lead_Source"].isin(CANONICAL_LEAD_SOURCES)
+            | ~raw_df["Stage"].isin(CANONICAL_STAGES)
+            | ~raw_df["Lead_Office"].isin(CANONICAL_LEAD_OFFICES)
+        ),
+        "numeric_format_issue": (
+            raw_df["Amount"].map(lambda value: isinstance(value, str))
+            | raw_df["Total_Product_Amount"].map(lambda value: isinstance(value, str))
+        ),
+    }
+
+    issue_masks["numeric_separator_issue"] = (
+        raw_df["Amount"].astype(str).str.contains(r"[,.]", na=False)
+        | raw_df["Total_Product_Amount"].astype(str).str.contains(r"[,.]", na=False)
+    )
+
+    scoped_df = clean_df.loc[~issue_masks["out_of_scope"]].copy()
+    excluded_df = clean_df.loc[issue_masks["out_of_scope"]].copy()
+    excluded_df.insert(1, "Exclusion_Reason", "Type fora do escopo do case")
+
+    scoped_df["Soma_dos_Produtos"] = scoped_df.groupby("Opportunity_ID")["Total_Product_Amount"].transform(
+        lambda series: series.sum(min_count=1)
+    )
+
+    issue_masks["amount_mismatch"] = (
+        (~scoped_df["Stage"].isin(EARLY_STAGES))
+        & scoped_df["Amount"].notna()
+        & scoped_df["Soma_dos_Produtos"].notna()
+        & (scoped_df["Amount"].round(2) != scoped_df["Soma_dos_Produtos"].round(2))
+    )
+
+    scoped_df["Amount_Was_Reconciled"] = (
+        scoped_df["Soma_dos_Produtos"].notna()
+        & scoped_df["Amount"].notna()
+        & (scoped_df["Amount"].round(2) != scoped_df["Soma_dos_Produtos"].round(2))
+    )
+
+    scoped_df["Amount"] = scoped_df["Soma_dos_Produtos"].combine_first(scoped_df["Amount"])
+    scoped_df["Status"] = np.where(scoped_df["Stage"].eq("Closed Won"), "Closed Won", "Open Pipeline")
+    scoped_df["Opportunity_Has_Multiple_Product_Rows"] = scoped_df.duplicated(
+        subset=["Opportunity_ID"], keep=False
+    )
+
+    deal_records: list[dict[str, object]] = []
+    for opportunity_id, group in scoped_df.sort_values(["Opportunity_ID", "Product_Name"]).groupby("Opportunity_ID"):
+        deal_records.append(
+            {
+                "Opportunity_ID": opportunity_id,
+                "Account_ID": first_not_blank(group["Account_ID"]),
+                "Account_Name": first_not_blank(group["Account_Name"]),
+                "Opportunity_Owner": first_not_blank(group["Opportunity_Owner"]),
+                "Opportunity_Name": first_not_blank(group["Opportunity_Name"]),
+                "Type": first_not_blank(group["Type"]),
+                "Stage": first_not_blank(group["Stage"]),
+                "Status": first_not_blank(group["Status"]),
+                "Amount": first_not_blank(group["Amount"]),
+                "Amount_Currency": first_not_blank(group["Amount_Currency"]),
+                "Total_Product_Amount_Sum": group["Total_Product_Amount"].sum(min_count=1),
+                "Total_Product_Amount_Currency": first_not_blank(group["Total_Product_Amount_Currency"]),
+                "Product_List": join_unique_values(group["Product_Name"]),
+                "Product_Count": group["Product_Name"].dropna().astype(str).str.strip().replace("", np.nan).dropna().nunique(),
+                "Close_Date": first_not_blank(group["Close_Date"]),
+                "Created_Date": first_not_blank(group["Created_Date"]),
+                "Lead_Source": first_not_blank(group["Lead_Source"]),
+                "Lead_Source_Category": first_not_blank(group["Lead_Source_Category"]),
+                "Lead_Office": first_not_blank(group["Lead_Office"]),
+                "Stage_Duration": first_not_blank(group["Stage_Duration"]),
+                "Delivery_Length_Months": first_not_blank(group["Delivery_Length_Months"]),
+                "Source_Row_Count": len(group),
+                "Amount_Was_Reconciled": bool(group["Amount_Was_Reconciled"].any()),
+            }
+        )
+
+    deals_df = pd.DataFrame(deal_records).sort_values(["Close_Date", "Opportunity_ID"], na_position="last")
+
+    base_product_columns = [
+        "Opportunity_ID",
+        "Account_ID",
+        "Account_Name",
+        "Opportunity_Owner",
+        "Opportunity_Name",
+        "Type",
+        "Stage",
+        "Amount",
+        "Amount_Currency",
+        "Total_Product_Amount",
+        "Total_Product_Amount_Currency",
+        "Product_Name",
+        "Close_Date",
+        "Created_Date",
+        "Lead_Source",
+        "Lead_Source_Category",
+        "Lead_Office",
+        "Stage_Duration",
+        "Delivery_Length_Months",
+    ]
+
+    support_product_columns = [
+        "Source_Row_Number",
+        "Opportunity_ID",
+        "Amount_Original",
+        "Amount",
+        "Amount_Was_Reconciled",
+        "Total_Product_Amount_Original",
+        "Total_Product_Amount",
+        "Soma_dos_Produtos",
+        "Lead_Source_Original",
+        "Lead_Source",
+        "Lead_Office_Original",
+        "Lead_Office",
+        "Stage_Original",
+        "Stage",
+        "Status",
+        "Opportunity_Has_Multiple_Product_Rows",
+    ]
+
+    excluded_columns = [
+        "Source_Row_Number",
+        "Exclusion_Reason",
+        "Opportunity_ID",
+        "Account_ID",
+        "Account_Name",
+        "Opportunity_Owner",
+        "Opportunity_Name",
+        "Type",
+        "Stage_Original",
+        "Lead_Source_Original",
+        "Lead_Office_Original",
+        "Amount_Original",
+        "Total_Product_Amount_Original",
+        "Product_Name",
+        "Close_Date",
+        "Created_Date",
+    ]
+
+    support_product_df = scoped_df[support_product_columns].sort_values(["Opportunity_ID", "Source_Row_Number"])
+    scoped_df = scoped_df[base_product_columns].sort_values(["Opportunity_ID", "Product_Name", "Close_Date"])
+    excluded_df = excluded_df[excluded_columns].sort_values(["Type", "Opportunity_ID", "Source_Row_Number"])
+
+    return scoped_df, support_product_df, deals_df, excluded_df, issue_masks
+
+
+def build_report_context(
+    raw_df: pd.DataFrame,
+    scoped_df: pd.DataFrame,
+    support_product_df: pd.DataFrame,
+    deals_df: pd.DataFrame,
+    excluded_df: pd.DataFrame,
+    issue_masks: dict[str, pd.Series],
+) -> dict[str, object]:
+    duplicate_examples = (
+        raw_df.loc[issue_masks["duplicate_rows"]]
+        .groupby("Opportunity_ID", as_index=False)
+        .agg(
+            Row_Count=("Opportunity_ID", "size"),
+            Type=("Type", first_not_blank),
+            Products=("Product_Name", join_unique_values),
+        )
+        .sort_values(["Row_Count", "Opportunity_ID"], ascending=[False, True])
+        .head(5)
+    )
+
+    categorical_examples_rows: list[dict[str, object]] = []
+    for field_name, issue_key, corrected_column in [
+        ("Lead_Source", "lead_source_issue", "Lead_Source"),
+        ("Stage", "stage_issue", "Stage"),
+        ("Lead_Office", "lead_office_issue", "Lead_Office"),
+    ]:
+        corrected_lookup = {
+            "Lead_Source": LEAD_SOURCE_LOOKUP,
+            "Stage": STAGE_LOOKUP,
+            "Lead_Office": LEAD_OFFICE_LOOKUP,
+        }[corrected_column]
+        sample = raw_df.loc[issue_masks[issue_key], ["Source_Row_Number", "Opportunity_ID", field_name]].head(8)
+        for row in sample.itertuples(index=False):
+            categorical_examples_rows.append(
+                {
+                    "Source_Row_Number": row.Source_Row_Number,
+                    "Opportunity_ID": row.Opportunity_ID,
+                    "Campo": field_name,
+                    "Valor_Original": getattr(row, field_name),
+                    "Valor_Corrigido": corrected_lookup.get(normalize_token(getattr(row, field_name)), str(getattr(row, field_name)).strip()),
+                }
+            )
+
+    numeric_examples = raw_df.loc[
+        issue_masks["numeric_format_issue"],
+        ["Source_Row_Number", "Opportunity_ID", "Amount", "Total_Product_Amount"],
+    ].head(8).copy().rename(
+        columns={
+            "Amount": "Amount_Original",
+            "Total_Product_Amount": "Total_Product_Amount_Original",
+        }
+    )
+    numeric_examples["Amount_Corrigido"] = numeric_examples["Amount_Original"].map(parse_number)
+    numeric_examples["Total_Product_Amount_Corrigido"] = numeric_examples["Total_Product_Amount_Original"].map(parse_number)
+
+    scoped_reference = support_product_df[
+        ["Opportunity_ID", "Source_Row_Number", "Amount_Original", "Amount", "Soma_dos_Produtos"]
+    ].copy()
+    mismatch_examples = (
+        scoped_reference.loc[support_product_df["Amount_Was_Reconciled"]]
+        .drop_duplicates("Opportunity_ID")
+        .rename(columns={"Amount": "Amount_Corrigido"})
+        .head(8)
+    )
+
+    categories = [
+        {
+            "slug": "escopo",
+            "title": "Registros fora do escopo da análise",
+            "count": int(issue_masks["out_of_scope"].sum()),
+            "description": (
+                "O case pede para considerar somente três tipos de oportunidade. Tudo o que estava "
+                "fora dessa lista foi separado para não contaminar as análises."
+            ),
+            "impact": (
+                f"{int(issue_masks['out_of_scope'].sum())} linhas saíram da base analítica. "
+                f"Os tipos removidos foram: {', '.join(sorted(map(str, excluded_df['Type'].dropna().unique())))}."
+            ),
+            "fix": (
+                "Mantive esses registros na aba `registros_excluidos` para auditoria e removi essas linhas "
+                "da base corrigida usada nas análises."
+            ),
+            "examples": dataframe_to_html_table(
+                excluded_df[["Source_Row_Number", "Opportunity_ID", "Type"]].head(8)
+            ),
+        },
+        {
+            "slug": "duplicidade",
+            "title": "Duplicidade aparente por granularidade de produto",
+            "count": int(issue_masks["duplicate_rows"].sum()),
+            "description": (
+                "A planilha original veio em nível de produto. Isso faz o mesmo deal aparecer em várias "
+                "linhas e pode inflar contagens se a análise for feita diretamente no bruto."
+            ),
+            "impact": (
+                f"{int(issue_masks['duplicate_rows'].sum())} linhas tinham `Opportunity_ID` repetido, "
+                f"representando {raw_df.loc[issue_masks['duplicate_rows'], 'Opportunity_ID'].nunique()} oportunidades. "
+                f"Depois da deduplicação analítica, a base ficou com {len(deals_df)} deals únicos."
+            ),
+            "fix": (
+                "Mantive a visão por produto na aba `base_produto_corrigida` e criei uma aba `deals_unicos` "
+                "com uma linha por oportunidade para evitar contagem em dobro."
+            ),
+            "examples": dataframe_to_html_table(duplicate_examples),
+        },
+        {
+            "slug": "categoricos",
+            "title": "Campos categóricos com grafia ou formatação fora do padrão",
+            "count": int(issue_masks["categorical_issue"].sum()),
+            "description": (
+                "Havia variações de caixa alta/baixa, espaços extras, acentos, abreviações e erros de digitação "
+                "em `Lead_Source`, `Stage` e `Lead_Office`. Isso quebra agrupamentos e pode dividir a mesma categoria em várias."
+            ),
+            "impact": (
+                f"{int(issue_masks['categorical_issue'].sum())} linhas tinham pelo menos um campo categórico fora da lista canônica. "
+                f"Quebra por campo: Lead_Source = {int(issue_masks['lead_source_issue'].sum())}, "
+                f"Stage = {int(issue_masks['stage_issue'].sum())}, Lead_Office = {int(issue_masks['lead_office_issue'].sum())}."
+            ),
+            "fix": (
+                "Normalizei os valores usando as listas canônicas do brief, corrigi aliases/typos e criei a coluna "
+                "`Lead_Source_Category` com a taxonomia de 6 grupos pedida no case."
+            ),
+            "examples": dataframe_to_html_table(pd.DataFrame(categorical_examples_rows)),
+        },
+        {
+            "slug": "numericos",
+            "title": "Campos numéricos armazenados em formatos inconsistentes",
+            "count": int(issue_masks["numeric_format_issue"].sum()),
+            "description": (
+                "Os campos monetários estavam misturando texto, números e separadores diferentes. "
+                "Sem padronização, isso pode causar soma errada, ordenação incorreta e leituras equivocadas de valor."
+            ),
+            "impact": (
+                f"{int(issue_masks['numeric_format_issue'].sum())} linhas tinham `Amount` ou `Total_Product_Amount` "
+                f"salvos como texto; em {int(issue_masks['numeric_separator_issue'].sum())} delas havia vírgula ou formatação mista "
+                "de milhar/decimal."
+            ),
+            "fix": (
+                "Convertemos os dois campos para número de forma robusta, preservando casos legítimos em branco nos estágios "
+                "`Opportunity Identified` e `Qualified`."
+            ),
+            "examples": dataframe_to_html_table(numeric_examples),
+        },
+        {
+            "slug": "amount",
+            "title": "Divergência entre `Amount` e soma dos produtos",
+            "count": int(support_product_df["Amount_Was_Reconciled"].sum()),
+            "description": (
+                "Em alguns deals, o valor total da oportunidade não batia com a soma dos produtos. "
+                "O próprio brief define que, nesses casos, a soma de `Total_Product_Amount` é a fonte da verdade."
+            ),
+            "impact": (
+                f"{int(support_product_df['Amount_Was_Reconciled'].sum())} linhas no escopo tinham esse problema, "
+                f"equivalentes a {support_product_df.loc[support_product_df['Amount_Was_Reconciled'], 'Opportunity_ID'].nunique()} oportunidades."
+            ),
+            "fix": (
+                "Substituí o `Amount` pelo total consolidado de produtos e sinalizei o ajuste na coluna "
+                "`Amount_Was_Reconciled`."
+            ),
+            "examples": dataframe_to_html_table(mismatch_examples),
+        },
+    ]
+
+    summary_rows = pd.DataFrame(
+        [
+            {"Categoria": category["title"], "Linhas_Afetadas": category["count"]}
+            for category in categories
+        ]
+    )
+
+    expected_nulls = scoped_df[
+        scoped_df["Stage"].isin(EARLY_STAGES) & scoped_df["Amount"].isna() & scoped_df["Product_Name"].isna()
+    ]
+
+    return {
+        "categories": categories,
+        "summary_table": dataframe_to_html_table(summary_rows),
+        "raw_rows": len(raw_df),
+        "scoped_rows": len(scoped_df),
+        "excluded_rows": len(excluded_df),
+        "unique_deals": len(deals_df),
+        "category_count": len(categories),
+        "expected_null_rows": len(expected_nulls),
+    }
+
+
+def render_report(context: dict[str, object]) -> str:
+    sections_html = "\n".join(
+        f"""
+        <section class="problem-card" id="{category['slug']}">
+          <div class="section-header">
+            <h2>{html.escape(category['title'])}</h2>
+            <span class="pill">{category['count']} linhas afetadas</span>
+          </div>
+          <p><strong>O que isso significa:</strong> {html.escape(category['description'])}</p>
+          <p><strong>Impacto:</strong> {html.escape(category['impact'])}</p>
+          <p><strong>O que foi feito:</strong> {html.escape(category['fix'])}</p>
+          <div class="table-wrapper">
+            <h3>Exemplos reais da planilha</h3>
+            {category['examples']}
+          </div>
+        </section>
+        """
+        for category in context["categories"]
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatório de Erros - Case Monks</title>
+  <style>
+    :root {{
+      --bg: #f4f1ea;
+      --surface: #fffdf8;
+      --ink: #1f2933;
+      --muted: #596579;
+      --line: #d8d2c3;
+      --brand: #0f766e;
+      --accent: #b45309;
+      --soft: #e7f7f5;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 24%),
+        linear-gradient(180deg, #faf7f0 0%, var(--bg) 100%);
+    }}
+    .page {{
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 20px 56px;
+    }}
+    .hero {{
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 16px 40px rgba(31, 41, 51, 0.08);
+    }}
+    h1, h2, h3 {{ margin-top: 0; }}
+    h1 {{ font-size: 2rem; margin-bottom: 12px; }}
+    p {{ line-height: 1.6; }}
+    .muted {{ color: var(--muted); }}
+    .kpis {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }}
+    .kpi {{
+      background: linear-gradient(180deg, #ffffff, #f8fcfb);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+    }}
+    .kpi .value {{
+      display: block;
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: var(--brand);
+    }}
+    .summary-card, .problem-card {{
+      margin-top: 24px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 12px 32px rgba(31, 41, 51, 0.06);
+    }}
+    .section-header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }}
+    .pill {{
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--brand);
+      font-weight: 700;
+      font-size: 0.92rem;
+    }}
+    .data-table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.94rem;
+      background: #ffffff;
+    }}
+    .data-table th,
+    .data-table td {{
+      border: 1px solid #e4ddcf;
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }}
+    .data-table th {{
+      background: #f5efe2;
+      font-weight: 700;
+    }}
+    .table-wrapper {{
+      margin-top: 18px;
+      overflow-x: auto;
+    }}
+    .note {{
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent);
+      background: #fff6eb;
+      border-radius: 12px;
+    }}
+    .empty-state {{
+      color: var(--muted);
+      margin: 0;
+    }}
+    code {{
+      background: #f1ede3;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-family: Consolas, monospace;
+      font-size: 0.92em;
+    }}
+    @media (max-width: 720px) {{
+      .page {{ padding: 20px 14px 40px; }}
+      .hero, .summary-card, .problem-card {{ padding: 20px; border-radius: 18px; }}
+      h1 {{ font-size: 1.6rem; }}
+    }}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>Relatório de erros e correções da planilha <code>opps_corrupted.xlsx</code></h1>
+      <p>
+        O arquivo original tinha problemas que afetariam tanto a contagem de oportunidades quanto a leitura de
+        valores e categorias. A limpeza abaixo foi feita pensando em alguém não-técnico: a ideia foi separar o que
+        está fora do escopo, padronizar nomes, transformar textos em números confiáveis e criar uma visão por deal
+        para evitar contagem em dobro.
+      </p>
+      <p class="muted">
+        Resumo em uma frase: a base recebida tinha {context['raw_rows']} linhas de produto, mas a versão tratada ficou com
+        {context['scoped_rows']} linhas no escopo analítico e {context['unique_deals']} oportunidades únicas prontas para análise.
+      </p>
+      <div class="kpis">
+        <div class="kpi"><span class="value">{context['raw_rows']}</span>linhas recebidas</div>
+        <div class="kpi"><span class="value">{context['scoped_rows']}</span>linhas válidas no escopo</div>
+        <div class="kpi"><span class="value">{context['unique_deals']}</span>deals únicos</div>
+        <div class="kpi"><span class="value">{context['category_count']}</span>categorias de problema</div>
+      </div>
+    </section>
+
+    <section class="summary-card">
+      <div class="section-header">
+        <h2>Resumo Executivo</h2>
+        <span class="pill">{context['excluded_rows']} linhas excluídas por escopo</span>
+      </div>
+      <p>
+        Os principais problemas encontrados foram: linhas fora do escopo do case, repetição de oportunidades por causa
+        da granularidade de produto, campos categóricos fora do padrão, valores monetários armazenados como texto e
+        divergências entre o valor total do deal e a soma dos produtos.
+      </p>
+      {context['summary_table']}
+      <div class="note">
+        {context['expected_null_rows']} linhas em <code>Opportunity Identified</code> ou <code>Qualified</code> ficaram sem valor e sem produto,
+        e isso <strong>não</strong> foi tratado como erro porque o próprio brief diz que esse comportamento é esperado nesses estágios.
+      </div>
+    </section>
+
+    {sections_html}
+  </main>
+</body>
+</html>
+"""
+
+
+def export_workbook(
+    scoped_df: pd.DataFrame,
+    support_product_df: pd.DataFrame,
+    deals_df: pd.DataFrame,
+    excluded_df: pd.DataFrame,
+) -> None:
+    with pd.ExcelWriter(OUTPUT_XLSX, engine="openpyxl") as writer:
+        scoped_df.to_excel(writer, sheet_name="base_produto_corrigida", index=False)
+        support_product_df.to_excel(writer, sheet_name="apoio_limpeza_produto", index=False)
+        deals_df.to_excel(writer, sheet_name="deals_unicos", index=False)
+        excluded_df.to_excel(writer, sheet_name="registros_excluidos", index=False)
+
+        workbook = writer.book
+        money_columns = {
+            "Amount",
+            "Amount_Original",
+            "Total_Product_Amount",
+            "Total_Product_Amount_Original",
+            "Soma_dos_Produtos",
+            "Total_Product_Amount_Sum",
+        }
+
+        for worksheet in workbook.worksheets:
+            worksheet.freeze_panes = "A2"
+            worksheet.auto_filter.ref = worksheet.dimensions
+
+            header_fill = "0F766E"
+            for cell in worksheet[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(fill_type="solid", fgColor=header_fill)
+
+            for column_cells in worksheet.columns:
+                header = column_cells[0].value
+                max_length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+                worksheet.column_dimensions[column_cells[0].column_letter].width = min(max(max_length + 2, 12), 38)
+
+                if header in {"Close_Date", "Created_Date"}:
+                    for cell in column_cells[1:]:
+                        cell.number_format = "DD/MM/YYYY"
+                elif header in money_columns:
+                    for cell in column_cells[1:]:
+                        cell.number_format = '#,##0.00'
+
+
+def main() -> None:
+    raw_df = prepare_raw_data()
+    scoped_df, support_product_df, deals_df, excluded_df, issue_masks = build_clean_dataframes(raw_df)
+
+    report_context = build_report_context(
+        raw_df,
+        scoped_df,
+        support_product_df,
+        deals_df,
+        excluded_df,
+        issue_masks,
+    )
+    report_html = render_report(report_context)
+
+    export_workbook(scoped_df, support_product_df, deals_df, excluded_df)
+    OUTPUT_HTML.write_text(report_html, encoding="utf-8")
+
+    print("Arquivos gerados com sucesso:")
+    print(f"- {OUTPUT_XLSX.name}")
+    print(f"- {OUTPUT_HTML.name}")
+
+
+if __name__ == "__main__":
+    main()
