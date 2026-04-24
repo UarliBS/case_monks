@@ -197,6 +197,7 @@ def format_html_value(value: object, column: str) -> str:
         "Total_Product_Amount_Original",
         "Sum_of_Products",
         "Amount_Corrigido",
+        "Total_Product_Amount_Corrigido",
     }:
         if isinstance(value, str):
             parsed = parse_number(value)
@@ -445,12 +446,12 @@ def build_report_context(
         ["Source_Row_Number", "Opportunity_ID", "Amount", "Total_Product_Amount"],
     ].head(8).copy().rename(
         columns={
-            "Amount": "Amount_Original",
-            "Total_Product_Amount": "Total_Product_Amount_Original",
+            "Amount": "Amount_Original_Bruto",
+            "Total_Product_Amount": "Total_Product_Amount_Original_Bruto",
         }
     )
-    numeric_examples["Amount_Corrigido"] = numeric_examples["Amount_Original"].map(parse_number)
-    numeric_examples["Total_Product_Amount_Corrigido"] = numeric_examples["Total_Product_Amount_Original"].map(parse_number)
+    numeric_examples["Amount_Corrigido"] = numeric_examples["Amount_Original_Bruto"].map(parse_number)
+    numeric_examples["Total_Product_Amount_Corrigido"] = numeric_examples["Total_Product_Amount_Original_Bruto"].map(parse_number)
 
     scoped_reference = support_product_df[
         ["Opportunity_ID", "Source_Row_Number", "Amount_Original", "Amount", "Sum_of_Products"]
