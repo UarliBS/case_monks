@@ -195,7 +195,7 @@ def format_html_value(value: object, column: str) -> str:
         "Amount_Original",
         "Total_Product_Amount",
         "Total_Product_Amount_Original",
-        "Soma_dos_Produtos",
+        "Sum_of_Products",
         "Amount_Corrigido",
     }:
         if isinstance(value, str):
@@ -275,24 +275,24 @@ def build_clean_dataframes(
     excluded_df = clean_df.loc[issue_masks["out_of_scope"]].copy()
     excluded_df.insert(1, "Exclusion_Reason", "Type fora do escopo do case")
 
-    scoped_df["Soma_dos_Produtos"] = scoped_df.groupby("Opportunity_ID")["Total_Product_Amount"].transform(
+    scoped_df["Sum_of_Products"] = scoped_df.groupby("Opportunity_ID")["Total_Product_Amount"].transform(
         lambda series: series.sum(min_count=1)
     )
 
     issue_masks["amount_mismatch"] = (
         (~scoped_df["Stage"].isin(EARLY_STAGES))
         & scoped_df["Amount"].notna()
-        & scoped_df["Soma_dos_Produtos"].notna()
-        & (scoped_df["Amount"].round(2) != scoped_df["Soma_dos_Produtos"].round(2))
+        & scoped_df["Sum_of_Products"].notna()
+        & (scoped_df["Amount"].round(2) != scoped_df["Sum_of_Products"].round(2))
     )
 
     scoped_df["Amount_Was_Reconciled"] = (
-        scoped_df["Soma_dos_Produtos"].notna()
+        scoped_df["Sum_of_Products"].notna()
         & scoped_df["Amount"].notna()
-        & (scoped_df["Amount"].round(2) != scoped_df["Soma_dos_Produtos"].round(2))
+        & (scoped_df["Amount"].round(2) != scoped_df["Sum_of_Products"].round(2))
     )
 
-    scoped_df["Amount"] = scoped_df["Soma_dos_Produtos"].combine_first(scoped_df["Amount"])
+    scoped_df["Amount"] = scoped_df["Sum_of_Products"].combine_first(scoped_df["Amount"])
     scoped_df["Status"] = np.where(scoped_df["Stage"].eq("Closed Won"), "Closed Won", "Open Pipeline")
     scoped_df["Opportunity_Has_Multiple_Product_Rows"] = scoped_df.duplicated(
         subset=["Opportunity_ID"], keep=False
@@ -360,7 +360,7 @@ def build_clean_dataframes(
         "Amount_Was_Reconciled",
         "Total_Product_Amount_Original",
         "Total_Product_Amount",
-        "Soma_dos_Produtos",
+        "Sum_of_Products",
         "Lead_Source_Original",
         "Lead_Source",
         "Lead_Office_Original",
@@ -453,7 +453,7 @@ def build_report_context(
     numeric_examples["Total_Product_Amount_Corrigido"] = numeric_examples["Total_Product_Amount_Original"].map(parse_number)
 
     scoped_reference = support_product_df[
-        ["Opportunity_ID", "Source_Row_Number", "Amount_Original", "Amount", "Soma_dos_Produtos"]
+        ["Opportunity_ID", "Source_Row_Number", "Amount_Original", "Amount", "Sum_of_Products"]
     ].copy()
     mismatch_examples = (
         scoped_reference.loc[support_product_df["Amount_Was_Reconciled"]]
@@ -468,16 +468,16 @@ def build_report_context(
             "title": "Registros fora do escopo da análise",
             "count": int(issue_masks["out_of_scope"].sum()),
             "description": (
-                "O case pede para considerar somente três tipos de oportunidade. Tudo o que estava "
-                "fora dessa lista foi separado para não contaminar as análises."
+                "O case pede para considerar somente três tipos de oportunidade: Project - Competitive, Project - Not Competitive e Change Order/Upsell. Tudo o que estava "
+                "fora dessa lista foi excluído da análise."
             ),
             "impact": (
                 f"{int(issue_masks['out_of_scope'].sum())} linhas saíram da base analítica. "
                 f"Os tipos removidos foram: {', '.join(sorted(map(str, excluded_df['Type'].dropna().unique())))}."
             ),
             "fix": (
-                "Mantive esses registros na aba `registros_excluidos` para auditoria e removi essas linhas "
-                "da base corrigida usada nas análises."
+                "Passei os registros excluídos para a aba 'registros_excluidos', afim de serem utilizados em análises futuras e removi essas linhas "
+                "da base corrigida usada nas análises, conforme foi solicitado no case."
             ),
             "examples": dataframe_to_html_table(
                 excluded_df[["Source_Row_Number", "Opportunity_ID", "Type"]].head(8)
@@ -485,19 +485,19 @@ def build_report_context(
         },
         {
             "slug": "duplicidade",
-            "title": "Duplicidade aparente por granularidade de produto",
+            "title": "Duplicações (relacionadas à granularidade de produto)",
             "count": int(issue_masks["duplicate_rows"].sum()),
             "description": (
-                "A planilha original veio em nível de produto. Isso faz o mesmo deal aparecer em várias "
-                "linhas e pode inflar contagens se a análise for feita diretamente no bruto."
+                "A planilha original está em nível de produto. Isso faz o mesmo deal aparecer em várias "
+                "linhas e pode atrapalhar as contagens se a análise for feita diretamente sem um tratamento adequado."
             ),
             "impact": (
-                f"{int(issue_masks['duplicate_rows'].sum())} linhas tinham `Opportunity_ID` repetido, "
+                f"{int(issue_masks['duplicate_rows'].sum())} linhas tinham 'Opportunity_ID' repetidos, "
                 f"representando {raw_df.loc[issue_masks['duplicate_rows'], 'Opportunity_ID'].nunique()} oportunidades. "
                 f"Depois da deduplicação analítica, a base ficou com {len(deals_df)} deals únicos."
             ),
             "fix": (
-                "Mantive a visão por produto na aba `base_produto_corrigida` e criei uma aba `deals_unicos` "
+                "Mantive a visão por produto na aba 'base_produto_corrigida' e criei uma aba 'deals_unicos' "
                 "com uma linha por oportunidade para evitar contagem em dobro."
             ),
             "examples": dataframe_to_html_table(duplicate_examples),
@@ -507,8 +507,8 @@ def build_report_context(
             "title": "Campos categóricos com grafia ou formatação fora do padrão",
             "count": int(issue_masks["categorical_issue"].sum()),
             "description": (
-                "Havia variações de caixa alta/baixa, espaços extras, acentos, abreviações e erros de digitação "
-                "em `Lead_Source`, `Stage` e `Lead_Office`. Isso quebra agrupamentos e pode dividir a mesma categoria em várias."
+                "Encontrei variações de caixa alta/baixa, espaços extras, acentos, abreviações e erros de digitação "
+                "nas colunas 'Lead_Source', 'Stage' e 'Lead_Office'. Isso estava quebrando os agrupamentos fazendo a categoria ser tratada como se fosse diferente do esperado."
             ),
             "impact": (
                 f"{int(issue_masks['categorical_issue'].sum())} linhas tinham pelo menos um campo categórico fora da lista canônica. "
@@ -516,45 +516,45 @@ def build_report_context(
                 f"Stage = {int(issue_masks['stage_issue'].sum())}, Lead_Office = {int(issue_masks['lead_office_issue'].sum())}."
             ),
             "fix": (
-                "Normalizei os valores usando as listas canônicas do brief, corrigi aliases/typos e criei a coluna "
-                "`Lead_Source_Category` com a taxonomia de 6 grupos pedida no case."
+                "Normalizei os valores usando as listas canônicas do case como referência e criei a coluna "
+                "'Lead_Source_Category' com as categorias: 'Inbound', 'Outbound', 'Referral', 'Customer Sucess', 'Event' e 'Unknown', como foi solicitado."
             ),
             "examples": dataframe_to_html_table(pd.DataFrame(categorical_examples_rows)),
         },
         {
             "slug": "numericos",
-            "title": "Campos numéricos armazenados em formatos inconsistentes",
+            "title": "Formatos inconsistentes em campos numéricos",
             "count": int(issue_masks["numeric_format_issue"].sum()),
             "description": (
                 "Os campos monetários estavam misturando texto, números e separadores diferentes. "
-                "Sem padronização, isso pode causar soma errada, ordenação incorreta e leituras equivocadas de valor."
+                "Sem uma devida padronização, isso pode causar soma errada, ordenação incorreta e leituras equivocadas de valor."
             ),
             "impact": (
-                f"{int(issue_masks['numeric_format_issue'].sum())} linhas tinham `Amount` ou `Total_Product_Amount` "
-                f"salvos como texto; em {int(issue_masks['numeric_separator_issue'].sum())} delas havia vírgula ou formatação mista "
+                f"{int(issue_masks['numeric_format_issue'].sum())} linhas tinham 'Amount' ou 'Total_Product_Amount' "
+                f"salvos como texto e em {int(issue_masks['numeric_separator_issue'].sum())} delas haviam vírgulas ou formatação mista "
                 "de milhar/decimal."
             ),
             "fix": (
-                "Convertemos os dois campos para número de forma robusta, preservando casos legítimos em branco nos estágios "
-                "`Opportunity Identified` e `Qualified`."
+                "Realizei a conversão dos dois campos para número de forma robusta, preservando casos legítimos em branco nos estágios "
+                "'Opportunity Identified' e 'Qualified'."
             ),
             "examples": dataframe_to_html_table(numeric_examples),
         },
         {
             "slug": "amount",
-            "title": "Divergência entre `Amount` e soma dos produtos",
+            "title": "Divergência entre 'Amount' e 'Total_Product_Amount'",
             "count": int(support_product_df["Amount_Was_Reconciled"].sum()),
             "description": (
                 "Em alguns deals, o valor total da oportunidade não batia com a soma dos produtos. "
-                "O próprio brief define que, nesses casos, a soma de `Total_Product_Amount` é a fonte da verdade."
+                "Nessas situações, o próprio case define que, a soma de 'Total_Product_Amount' é a fonte da verdade."
             ),
             "impact": (
                 f"{int(support_product_df['Amount_Was_Reconciled'].sum())} linhas no escopo tinham esse problema, "
                 f"equivalentes a {support_product_df.loc[support_product_df['Amount_Was_Reconciled'], 'Opportunity_ID'].nunique()} oportunidades."
             ),
             "fix": (
-                "Substituí o `Amount` pelo total consolidado de produtos e sinalizei o ajuste na coluna "
-                "`Amount_Was_Reconciled`."
+                "Substituí o 'Amount' pelo total consolidado de produtos e sinalizei o ajuste na coluna "
+                "'Amount_Was_Reconciled'."
             ),
             "examples": dataframe_to_html_table(mismatch_examples),
         },
@@ -740,20 +740,20 @@ def render_report(context: dict[str, object]) -> str:
     <section class="hero">
       <h1>Relatório de erros e correções da planilha <code>opps_corrupted.xlsx</code></h1>
       <p>
-        O arquivo original tinha problemas que afetariam tanto a contagem de oportunidades quanto a leitura de
-        valores e categorias. A limpeza abaixo foi feita pensando em alguém não-técnico: a ideia foi separar o que
-        está fora do escopo, padronizar nomes, transformar textos em números confiáveis e criar uma visão por deal
+        O arquivo original possuía problemas que afetariam tanto a contagem de oportunidades quanto a leitura de
+        valores e categorias. A limpeza foi realizada de maneira minuciosa e o relatório foi gerado para esclarecer cada ação realizada. 
+        A ideia foi separar o que está fora do escopo, padronizar nomes, transformar textos em números confiáveis e criar uma visão por deal
         para evitar contagem em dobro.
       </p>
       <p class="muted">
-        Resumo em uma frase: a base recebida tinha {context['raw_rows']} linhas de produto, mas a versão tratada ficou com
+        A base recebida tinha {context['raw_rows']} linhas de produto, mas a versão tratada ficou com
         {context['scoped_rows']} linhas no escopo analítico e {context['unique_deals']} oportunidades únicas prontas para análise.
       </p>
       <div class="kpis">
-        <div class="kpi"><span class="value">{context['raw_rows']}</span>linhas recebidas</div>
-        <div class="kpi"><span class="value">{context['scoped_rows']}</span>linhas válidas no escopo</div>
-        <div class="kpi"><span class="value">{context['unique_deals']}</span>deals únicos</div>
-        <div class="kpi"><span class="value">{context['category_count']}</span>categorias de problema</div>
+        <div class="kpi"><span class="value">{context['raw_rows']}</span>Linhas recebidas</div>
+        <div class="kpi"><span class="value">{context['scoped_rows']}</span>Linhas válidas no escopo</div>
+        <div class="kpi"><span class="value">{context['unique_deals']}</span>Deals únicos</div>
+        <div class="kpi"><span class="value">{context['category_count']}</span>Categorias de problema</div>
       </div>
     </section>
 
@@ -770,7 +770,7 @@ def render_report(context: dict[str, object]) -> str:
       {context['summary_table']}
       <div class="note">
         {context['expected_null_rows']} linhas em <code>Opportunity Identified</code> ou <code>Qualified</code> ficaram sem valor e sem produto,
-        e isso <strong>não</strong> foi tratado como erro porque o próprio brief diz que esse comportamento é esperado nesses estágios.
+        e isso <strong>não</strong> foi tratado como erro, pois o próprio case diz que esse comportamento é esperado nesses estágios onde o deal ainda não foi escopado.
       </div>
     </section>
 
@@ -799,7 +799,7 @@ def export_workbook(
             "Amount_Original",
             "Total_Product_Amount",
             "Total_Product_Amount_Original",
-            "Soma_dos_Produtos",
+            "Sum_of_Products",
             "Total_Product_Amount_Sum",
         }
 
