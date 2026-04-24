@@ -96,7 +96,7 @@ def escape_attr(value: object) -> str:
 
 def svg_card(title: str, svg_content: str, legend_html: str = "") -> str:
     return f"""
-    <div class="viz-frame interactive-card" data-tooltip="{escape_attr(title)}">
+    <div class="viz-frame interactive-card2">
       <div class="viz-title">{html.escape(title)}</div>
       {svg_content}
       {legend_html}
@@ -406,7 +406,7 @@ def build_metric_badges(metrics: list[tuple[str, str]]) -> str:
     for label, value in metrics:
         cards.append(
             f"""
-            <div class="metric-card interactive-card" data-tooltip="{escape_attr(f'{label}: {value}')}">
+            <div class="metric-card interactive-card">
               <span class="metric-value">{html.escape(value)}</span>
               <span class="metric-label">{html.escape(label)}</span>
             </div>
@@ -417,7 +417,7 @@ def build_metric_badges(metrics: list[tuple[str, str]]) -> str:
 
 def build_section(title: str, content: str, note: str) -> str:
     return f"""
-    <section class="section-card interactive-card" data-tooltip="{escape_attr(title)}">
+    <section class="section-card interactive-card2">
       <h2>{html.escape(title)}</h2>
       {content}
       <p class="note">{html.escape(note)}</p>
@@ -712,6 +712,14 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
       box-shadow: 0 18px 38px rgba(15, 118, 110, 0.12);
       border-color: rgba(15, 118, 110, 0.28);
     }}
+    .interactive-card2 {{
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+      cursor: default;
+    }}
+    .interactive-card2:hover {{
+      box-shadow: 0 18px 38px rgba(15, 118, 110, 0.12);
+      border-color: rgba(15, 118, 110, 0.28);
+    }}
     .viz-frame {{
       margin-top: 14px;
       border: 1px solid #ece5d8;
@@ -876,7 +884,7 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
       <h1>Análise comercial a partir da base corrigida</h1>
       <p>
         Este relatório usa a aba <strong>deals_unicos</strong> do arquivo <code>opps_corrigido.xlsx</code> para evitar dupla contagem
-        de oportunidades em deals com vários produtos. Para os gráficos de pipeline, a coluna <code>Close_Date</code> foi tratada
+        de oportunidades em deals com vários produtos. Para os gráficos de pipeline, a coluna <code>'Close_Date'</code> foi tratada
         como a data esperada de fechamento das oportunidades ainda abertas.
       </p>
       <p class="muted">
