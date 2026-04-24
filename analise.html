@@ -85,6 +85,14 @@
       box-shadow: 0 18px 38px rgba(15, 118, 110, 0.12);
       border-color: rgba(15, 118, 110, 0.28);
     }
+    .interactive-card2 {
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+      cursor: default;
+    }
+    .interactive-card2:hover {
+      box-shadow: 0 18px 38px rgba(15, 118, 110, 0.12);
+      border-color: rgba(15, 118, 110, 0.28);
+    }
     .viz-frame {
       margin-top: 14px;
       border: 1px solid #ece5d8;
@@ -249,29 +257,29 @@
       <h1>Análise comercial a partir da base corrigida</h1>
       <p>
         Este relatório usa a aba <strong>deals_unicos</strong> do arquivo <code>opps_corrigido.xlsx</code> para evitar dupla contagem
-        de oportunidades em deals com vários produtos. Para os gráficos de pipeline, a coluna <code>Close_Date</code> foi tratada
+        de oportunidades em deals com vários produtos. Para os gráficos de pipeline, a coluna <code>'Close_Date'</code> foi tratada
         como a data esperada de fechamento das oportunidades ainda abertas.
       </p>
       <p class="muted">
         Data de referência para a idade do pipeline aberto: 24/04/2026.
       </p>
       <div class="metric-grid">
-            <div class="metric-card interactive-card" data-tooltip="Deals únicos analisados: 203">
+            <div class="metric-card interactive-card">
               <span class="metric-value">203</span>
               <span class="metric-label">Deals únicos analisados</span>
             </div>
             
-            <div class="metric-card interactive-card" data-tooltip="Closed Won em 2026: 67">
+            <div class="metric-card interactive-card">
               <span class="metric-value">67</span>
               <span class="metric-label">Closed Won em 2026</span>
             </div>
             
-            <div class="metric-card interactive-card" data-tooltip="Open Pipeline: 136">
+            <div class="metric-card interactive-card">
               <span class="metric-value">136</span>
               <span class="metric-label">Open Pipeline</span>
             </div>
             
-            <div class="metric-card interactive-card" data-tooltip="Receita Closed Won 2026: R$ 27.186.885,84">
+            <div class="metric-card interactive-card">
               <span class="metric-value">R$ 27.186.885,84</span>
               <span class="metric-label">Receita Closed Won 2026</span>
             </div>
@@ -279,13 +287,13 @@
     </section>
     <div class="section-grid">
       
-    <section class="section-card interactive-card" data-tooltip="1. Receita Closed Won MoM">
+    <section class="section-card interactive-card2">
       <h2>1. Receita Closed Won MoM</h2>
       
-    <div class="viz-frame interactive-card" data-tooltip="Receita Closed Won mês a mês">
-      <div class="viz-title">Receita Closed Won mês a mês</div>
+    <div class="viz-frame interactive-card2">
+      <div class="viz-title">Gráfico contendo a soma de &#x27;Amount&#x27; deoportunidades Closed Won, mês a mês em 2026</div>
       
-    <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Receita Closed Won mês a mês">
+    <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Gráfico contendo a soma de &#x27;Amount&#x27; deoportunidades Closed Won, mês a mês em 2026">
       
             <line x1="72" y1="296.0" x2="836" y2="296.0" class="grid-line" />
             <text x="62" y="300.0" text-anchor="end" class="axis-label">0,0M</text>
@@ -328,14 +336,14 @@
       <p class="note">O pico de receita fechada aconteceu em Fev/26, com R$ 9.873.872,16. Depois de fevereiro, o volume de Closed Won desacelerou nos meses seguintes.</p>
     </section>
     
-    <section class="section-card interactive-card" data-tooltip="2. Participação % por Lead_Source">
+    <section class="section-card interactive-card2">
       <h2>2. Participação % por Lead_Source</h2>
       
-    <div class="viz-frame interactive-card" data-tooltip="Participação de receita Closed Won por Lead Source">
-      <div class="viz-title">Participação de receita Closed Won por Lead Source</div>
+    <div class="viz-frame interactive-card2">
+      <div class="viz-title">Participação de receita &#x27;Closed Won&#x27; por &#x27;Lead_Source&#x27;</div>
       
     <div class="donut-layout">
-      <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Participação de receita Closed Won por Lead Source">
+      <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Participação de receita &#x27;Closed Won&#x27; por &#x27;Lead_Source&#x27;">
         <path d="M 200.00 62.00 A 118 118 0 1 1 107.69 253.50 L 151.50 218.62 A 62 62 0 1 0 200.00 118.00 Z" fill="#0f766e" class="interactive-shape" data-tooltip="Customer Success: R$ 17.480.535,67 (64,3%)" /><path d="M 107.69 253.50 A 118 118 0 0 1 134.02 82.17 L 165.33 128.60 A 62 62 0 0 0 151.50 218.62 Z" fill="#d6b68a" class="interactive-shape" data-tooltip="Referral: R$ 7.138.744,01 (26,3%)" /><path d="M 134.02 82.17 A 118 118 0 0 1 167.35 66.61 L 182.84 120.42 A 62 62 0 0 0 165.33 128.60 Z" fill="#b45309" class="interactive-shape" data-tooltip="Inbound: R$ 1.354.442,45 (5,0%)" /><path d="M 167.35 66.61 A 118 118 0 0 1 194.59 62.12 L 197.16 118.07 A 62 62 0 0 0 182.84 120.42 Z" fill="#1d4ed8" class="interactive-shape" data-tooltip="Outbound: R$ 1.014.586,08 (3,7%)" /><path d="M 194.59 62.12 A 118 118 0 0 1 200.00 62.00 L 200.00 118.00 A 62 62 0 0 0 197.16 118.07 Z" fill="#be123c" class="interactive-shape" data-tooltip="Unknown: R$ 198.577,63 (0,7%)" />
         
       <text x="200" y="172" text-anchor="middle" class="donut-center-label">Total</text>
@@ -380,19 +388,19 @@
       
     </div>
     
-      <p class="note">Customer Success domina a receita fechada: Customer Success responde por 64,3% do valor de Closed Won. Referral aparece como a segunda principal alavanca.</p>
+      <p class="note">Customer Success domina a receita fechada e responde por 64,3% do valor de Closed Won.</p>
     </section>
     
-    <section class="section-card interactive-card" data-tooltip="3. Top 10 Oportunidades em Aberto">
+    <section class="section-card interactive-card2">
       <h2>3. Top 10 Oportunidades em Aberto</h2>
-      <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Produto(s)</th><th>Estágio</th><th>Valor</th><th>Data esperada de fechamento</th></tr></thead><tbody><tr class="interactive-row" data-tooltip="Cliente: Jasper Security | Produto(s): Content - Platform - Performance, SEO, CRM &amp;amp; Loyalty | DDM - Data - Services &amp;amp; Tech - Services (Analytics &amp;amp; Support) | DDM - Data - Services &amp;amp; Tech - Services (Data Science/Data Eng.) | DDM - Media - Creative | DDM - Media - Managed Media (AOR) | Estágio: Negotiation | Valor: R$ 6.208.423,20 | Data esperada de fechamento: 13/05/2026"><td>Jasper Security</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Data - Services &amp; Tech - Services (Data Science/Data Eng.) | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Negotiation</td><td>R$ 6.208.423,20</td><td>13/05/2026</td></tr><tr class="interactive-row" data-tooltip="Cliente: Cedar Foods | Produto(s): Content - Platform - Performance, SEO, CRM &amp;amp; Loyalty | Content - Social - AOR | DDM - Data - Services &amp;amp; Tech - Services (Analytics &amp;amp; Support) | DDM - Media - Creative | DDM - Media - Managed Media (AOR) | Estágio: Pitched | Valor: R$ 4.565.828,57 | Data esperada de fechamento: 30/06/2026"><td>Cedar Foods</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | Content - Social - AOR | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Pitched</td><td>R$ 4.565.828,57</td><td>30/06/2026</td></tr><tr class="interactive-row" data-tooltip="Cliente: Hemlock Insurance | Produto(s): DDM - Data - Services &amp;amp; Tech - Services (Analytics &amp;amp; Support) | Estágio: Pitched | Valor: R$ 3.363.176,34 | Data esperada de fechamento: 30/06/2026"><td>Hemlock Insurance</td><td>DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support)</td><td>Pitched</td><td>R$ 3.363.176,34</td><td>30/06/2026</td></tr><tr class="interactive-row" data-tooltip="Cliente: Nova Studios | Produto(s): Content - Social - AOR | DDM - Media - Creative | DDM - Media - Managed Media (AOR) | Estágio: Registration | Valor: R$ 3.043.949,95 | Data esperada de fechamento: 30/04/2026"><td>Nova Studios</td><td>Content - Social - AOR | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Registration</td><td>R$ 3.043.949,95</td><td>30/04/2026</td></tr><tr class="interactive-row" data-tooltip="Cliente: Nova Studios | Produto(s): Content - Platform - Performance, SEO, CRM &amp;amp; Loyalty | DDM - Commerce - Content | Estágio: Negotiation | Valor: R$ 3.015.949,32 | Data esperada de fechamento: 31/07/2026"><td>Nova Studios</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Commerce - Content</td><td>Negotiation</td><td>R$ 3.015.949,32</td><td>31/07/2026</td></tr><tr class="interactive-row" data-tooltip="Cliente: Nimbus Media | Produto(s): Content - Social - AOR | DDM - Commerce - Content | DDM - Data - Services &amp;amp; Tech - Services (Analytics &amp;amp; Support) | DDM - Media - Creative | DDM - Media - Managed Media (AOR) | Estágio: Negotiation | Valor: R$ 2.627.267,83 | Data esperada de fechamento: 11/05/2026"><td>Nimbus Media</td><td>Content - Social - AOR | DDM - Commerce - Content | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Negotiation</td><td>R$ 2.627.267,83</td><td>11/05/2026</td></tr><tr class="interactive-row" data-tooltip="Cliente: Company 118 | Produto(s): Content - Platform - Performance, SEO, CRM &amp;amp; Loyalty | DDM - Data - Services &amp;amp; Tech - Services (Analytics &amp;amp; Support) | DDM - Media - Creative | DDM - Media - Managed Media (AOR) | Estágio: Pitched | Valor: R$ 2.344.909,80 | Data esperada de fechamento: 29/05/2026"><td>Company 118</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Pitched</td><td>R$ 2.344.909,80</td><td>29/05/2026</td></tr><tr class="interactive-row" data-tooltip="Cliente: Saffron Fashion | Produto(s): Content - Platform - Performance, SEO, CRM &amp;amp; Loyalty | Estágio: Negotiation | Valor: R$ 2.316.291,86 | Data esperada de fechamento: 31/05/2026"><td>Saffron Fashion</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty</td><td>Negotiation</td><td>R$ 2.316.291,86</td><td>31/05/2026</td></tr><tr class="interactive-row" data-tooltip="Cliente: Thistle Tech | Produto(s): DDM - Data - Services &amp;amp; Tech - Services (Analytics &amp;amp; Support) | Estágio: Qualified | Valor: R$ 2.163.037,20 | Data esperada de fechamento: 30/06/2026"><td>Thistle Tech</td><td>DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support)</td><td>Qualified</td><td>R$ 2.163.037,20</td><td>30/06/2026</td></tr><tr class="interactive-row" data-tooltip="Cliente: Walnut Manufacturing | Produto(s): Content - Platform - Performance, SEO, CRM &amp;amp; Loyalty | Content - Social - AOR | DDM - Data - Services &amp;amp; Tech - Services (Analytics &amp;amp; Support) | DDM - Media - Managed Media (AOR) | Estágio: Pitched | Valor: R$ 2.133.050,04 | Data esperada de fechamento: 29/05/2026"><td>Walnut Manufacturing</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | Content - Social - AOR | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Media - Managed Media (AOR)</td><td>Pitched</td><td>R$ 2.133.050,04</td><td>29/05/2026</td></tr></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Produto(s)</th><th>Estágio</th><th>Valor</th><th>Data esperada de fechamento</th></tr></thead><tbody><tr class="interactive-row"><td>Jasper Security</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Data - Services &amp; Tech - Services (Data Science/Data Eng.) | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Negotiation</td><td>R$ 6.208.423,20</td><td>13/05/2026</td></tr><tr class="interactive-row"><td>Cedar Foods</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | Content - Social - AOR | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Pitched</td><td>R$ 4.565.828,57</td><td>30/06/2026</td></tr><tr class="interactive-row"><td>Hemlock Insurance</td><td>DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support)</td><td>Pitched</td><td>R$ 3.363.176,34</td><td>30/06/2026</td></tr><tr class="interactive-row"><td>Nova Studios</td><td>Content - Social - AOR | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Registration</td><td>R$ 3.043.949,95</td><td>30/04/2026</td></tr><tr class="interactive-row"><td>Nova Studios</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Commerce - Content</td><td>Negotiation</td><td>R$ 3.015.949,32</td><td>31/07/2026</td></tr><tr class="interactive-row"><td>Nimbus Media</td><td>Content - Social - AOR | DDM - Commerce - Content | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Negotiation</td><td>R$ 2.627.267,83</td><td>11/05/2026</td></tr><tr class="interactive-row"><td>Company 118</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Media - Creative | DDM - Media - Managed Media (AOR)</td><td>Pitched</td><td>R$ 2.344.909,80</td><td>29/05/2026</td></tr><tr class="interactive-row"><td>Saffron Fashion</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty</td><td>Negotiation</td><td>R$ 2.316.291,86</td><td>31/05/2026</td></tr><tr class="interactive-row"><td>Thistle Tech</td><td>DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support)</td><td>Qualified</td><td>R$ 2.163.037,20</td><td>30/06/2026</td></tr><tr class="interactive-row"><td>Walnut Manufacturing</td><td>Content - Platform - Performance, SEO, CRM &amp; Loyalty | Content - Social - AOR | DDM - Data - Services &amp; Tech - Services (Analytics &amp; Support) | DDM - Media - Managed Media (AOR)</td><td>Pitched</td><td>R$ 2.133.050,04</td><td>29/05/2026</td></tr></tbody></table></div>
       <p class="note">A maior oportunidade aberta hoje é de Jasper Security, com R$ 6.208.423,20. O topo do pipeline está concentrado em estágios de Pitched e Negotiation.</p>
     </section>
     
-    <section class="section-card interactive-card" data-tooltip="4. Win rate por Lead_Source">
+    <section class="section-card interactive-card2">
       <h2>4. Win rate por Lead_Source</h2>
       
-    <div class="viz-frame interactive-card" data-tooltip="Win rate por Lead Source">
+    <div class="viz-frame interactive-card2">
       <div class="viz-title">Win rate por Lead Source</div>
       
     <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Win rate por Lead Source">
@@ -446,13 +454,13 @@
       <p class="note">Customer Success tem o melhor win rate da base, com 42,4%. Event ainda não converteu nenhum deal na base corrigida.</p>
     </section>
     
-    <section class="section-card interactive-card" data-tooltip="5. Ticket médio por Type">
+    <section class="section-card interactive-card2">
       <h2>5. Ticket médio por Type</h2>
       
-    <div class="viz-frame interactive-card" data-tooltip="Ticket médio por Type">
-      <div class="viz-title">Ticket médio por Type</div>
+    <div class="viz-frame interactive-card2">
+      <div class="viz-title">Valor médio de deal por Type</div>
       
-    <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Ticket médio por Type">
+    <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Valor médio de deal por Type">
       
             <line x1="72" y1="296.0" x2="836" y2="296.0" class="grid-line" />
             <text x="62" y="300.0" text-anchor="end" class="axis-label">0,0M</text>
@@ -488,16 +496,16 @@
       
     </div>
     
-      <p class="note">Project - Competitive tem o maior ticket médio, em R$ 937.650,36. Project - Not Competitive roda com ticket bem menor, o que muda a expectativa de priorização comercial.</p>
+      <p class="note">&#x27;Project - Competitive&#x27; tem o maior ticket médio, em R$ 937.650,36. &#x27;Project - Not Competitive&#x27; roda com ticket bem menor, o que muda a expectativa de priorização comercial.</p>
     </section>
     
-    <section class="section-card interactive-card" data-tooltip="6. Pipeline em aberto por Stage">
+    <section class="section-card interactive-card2">
       <h2>6. Pipeline em aberto por Stage</h2>
       
-    <div class="viz-frame interactive-card" data-tooltip="Pipeline aberto por Stage">
-      <div class="viz-title">Pipeline aberto por Stage</div>
+    <div class="viz-frame interactive-card2">
+      <div class="viz-title">Gráfico com a soma de &#x27;Amount&#x27; em cada estágio (apenas oportunidades em aberto)</div>
       
-    <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Pipeline aberto por Stage">
+    <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Gráfico com a soma de &#x27;Amount&#x27; em cada estágio (apenas oportunidades em aberto)">
       
             <line x1="72" y1="296.0" x2="836" y2="296.0" class="grid-line" />
             <text x="62" y="300.0" text-anchor="end" class="axis-label">0,0M</text>
@@ -548,13 +556,13 @@
       <p class="note">Pitched concentra o maior valor em aberto, com R$ 29.525.720,06, seguido de Negotiation. Isso mostra que a maior parte do pipeline já está em fases comerciais avançadas.</p>
     </section>
     
-    <section class="section-card interactive-card" data-tooltip="7. Mix New Business vs Upsell ao longo do tempo">
+    <section class="section-card interactive-card2">
       <h2>7. Mix New Business vs Upsell ao longo do tempo</h2>
       
-    <div class="viz-frame interactive-card" data-tooltip="Mix New Business vs Upsell ao longo do tempo">
-      <div class="viz-title">Mix New Business vs Upsell ao longo do tempo</div>
+    <div class="viz-frame interactive-card2">
+      <div class="viz-title">Gráfico com a proporção entre &#x27;Project - Competitive&#x27; / &#x27;Not Competitive&#x27;(NewBusiness) e &#x27;Change Order/Upsell&#x27; por mês de fechamento</div>
       
-    <svg viewBox="0 0 860 380" class="chart-svg" role="img" aria-label="Mix New Business vs Upsell ao longo do tempo">
+    <svg viewBox="0 0 860 380" class="chart-svg" role="img" aria-label="Gráfico com a proporção entre &#x27;Project - Competitive&#x27; / &#x27;Not Competitive&#x27;(NewBusiness) e &#x27;Change Order/Upsell&#x27; por mês de fechamento">
       <line x1="72" y1="308" x2="836" y2="308" class="axis-line" />
       <rect x="72.0" y="283.0" width="97.1" height="25.0" rx="6" fill="#d6b68a" class="interactive-shape" data-tooltip="Jan/26 | New Business: R$ 3.389.586,08 | Total: R$ 9.621.098,15" /><rect x="72.0" y="237.1" width="97.1" height="45.9" rx="6" fill="#0f766e" class="interactive-shape" data-tooltip="Jan/26 | Upsell: R$ 6.231.512,07 | Total: R$ 9.621.098,15" />
             <text x="120.6" y="332" text-anchor="middle" class="axis-label">Jan/26</text>
@@ -593,13 +601,13 @@
         </div>
     </div>
     
-      <p class="note">O mix mensal é puxado por Upsell em 5 dos 7 meses com volume. O peso de Change Order/Upsell fica ainda mais forte entre março e julho.</p>
+      <p class="note">O mix mensal é puxado por Upsell em 5 dos 7 meses com volume. O peso de &#x27;Change Order/Upsell&#x27; fica ainda mais forte entre março e julho.</p>
     </section>
     
-    <section class="section-card interactive-card" data-tooltip="8. Ciclo de venda médio">
+    <section class="section-card interactive-card2">
       <h2>8. Ciclo de venda médio</h2>
       
-    <div class="viz-frame interactive-card" data-tooltip="Ciclo médio de venda por Lead Office">
+    <div class="viz-frame interactive-card2">
       <div class="viz-title">Ciclo médio de venda por Lead Office</div>
       
     <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Ciclo médio de venda por Lead Office">
@@ -641,13 +649,13 @@
       <p class="note">Sao Carlos, BR tem o ciclo médio mais curto, perto de 67,3 dias, enquanto Sao Paulo, BR opera com o ciclo mais longo da base.</p>
     </section>
     
-    <section class="section-card interactive-card" data-tooltip="9. Top 10 clientes Closed Won (YTD)">
+    <section class="section-card interactive-card2">
       <h2>9. Top 10 clientes Closed Won (YTD)</h2>
       
-    <div class="viz-frame interactive-card" data-tooltip="Top 10 clientes Closed Won (YTD)">
-      <div class="viz-title">Top 10 clientes Closed Won (YTD)</div>
+    <div class="viz-frame interactive-card2">
+      <div class="viz-title">Os maiores clientes por valor total fechado em 2026</div>
       
-    <svg viewBox="0 0 860 430" class="chart-svg" role="img" aria-label="Top 10 clientes Closed Won (YTD)">
+    <svg viewBox="0 0 860 430" class="chart-svg" role="img" aria-label="Os maiores clientes por valor total fechado em 2026">
       
             <text x="228" y="46" text-anchor="end" class="axis-label">Saffron Fashion</text>
             <rect x="240" y="30" width="540.0" height="22" rx="7" fill="#0f766e" class="interactive-shape" data-tooltip="Saffron Fashion: R$ 4.398.171,15" />
@@ -697,13 +705,13 @@
       <p class="note">Saffron Fashion lidera o ranking com R$ 4.398.171,15. Os 3 maiores clientes já representam uma fatia relevante da receita fechada no ano.</p>
     </section>
     
-    <section class="section-card interactive-card" data-tooltip="10. Idade do pipeline aberto">
+    <section class="section-card interactive-card2">
       <h2>10. Idade do pipeline aberto</h2>
       
-    <div class="viz-frame interactive-card" data-tooltip="Idade do pipeline aberto (dias desde Created_Date)">
-      <div class="viz-title">Idade do pipeline aberto (dias desde Created_Date)</div>
+    <div class="viz-frame interactive-card2">
+      <div class="viz-title">Histograma dos dias desde &#x27;Created_Date&#x27; paraoportunidades ainda em aberto</div>
       
-    <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Idade do pipeline aberto (dias desde Created_Date)">
+    <svg viewBox="0 0 860 360" class="chart-svg" role="img" aria-label="Histograma dos dias desde &#x27;Created_Date&#x27; paraoportunidades ainda em aberto">
       <line x1="72" y1="288" x2="836" y2="288" class="axis-line" />
       
             <rect x="72.0" y="40.0" width="100.6" height="248.0" rx="7" fill="#475569" class="interactive-shape" data-tooltip="10-57 dias: 83 oportunidade(s)" />

@@ -379,7 +379,11 @@ def build_histogram(values: list[float], bins: int, title: str, color: str = CHA
     return svg_card(title, svg)
 
 
-def dataframe_to_table(df: pd.DataFrame, money_columns: set[str] | None = None) -> str:
+def dataframe_to_table(
+    df: pd.DataFrame,
+    money_columns: set[str] | None = None,
+    enable_tooltip: bool = True,
+) -> str:
     money_columns = money_columns or set()
     headers = "".join(f"<th>{html.escape(str(column))}</th>" for column in df.columns)
     rows = []
@@ -397,7 +401,10 @@ def dataframe_to_table(df: pd.DataFrame, money_columns: set[str] | None = None) 
                 rendered = html.escape(str(value))
             cells.append(f"<td>{rendered}</td>")
             tooltip_parts.append(f"{column}: {rendered}")
-        rows.append(f'<tr class="interactive-row" data-tooltip="{escape_attr(" | ".join(tooltip_parts))}">{"".join(cells)}</tr>')
+        if enable_tooltip:
+            rows.append(f'<tr class="interactive-row" data-tooltip="{escape_attr(" | ".join(tooltip_parts))}">{"".join(cells)}</tr>')
+        else:
+            rows.append(f'<tr class="interactive-row">{"".join(cells)}</tr>')
     return f'<div class="table-wrap"><table><thead><tr>{headers}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
 
 
@@ -446,7 +453,7 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
         closed_won.groupby("Close_Month")["Amount"].sum().reindex(MONTH_ORDER).dropna()
     )
     closed_mom_labels = [MONTH_LABELS.get(month, month) for month in closed_mom.index]
-    revenue_chart = build_bar_chart(closed_mom_labels, closed_mom.tolist(), "Receita Closed Won mês a mês")
+    revenue_chart = build_bar_chart(closed_mom_labels, closed_mom.tolist(), "Gráfico contendo a soma de 'Amount' de oportunidades Closed Won, mês a mês em 2026")
     best_month = closed_mom.idxmax()
     note_1 = (
         f"O pico de receita fechada aconteceu em {MONTH_LABELS.get(best_month, best_month)}, com "
@@ -468,14 +475,14 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
     lead_share_chart = build_donut_chart(
         lead_share.index.tolist(),
         lead_share.tolist(),
-        "Participação de receita Closed Won por Lead Source",
+        "Participação de receita 'Closed Won' por 'Lead_Source'",
         donut_colors,
     )
     top_lead_category = lead_share.idxmax()
     top_lead_share = (lead_share.max() / lead_share.sum()) * 100
     note_2 = (
-        f"Customer Success domina a receita fechada: {top_lead_category} responde por "
-        f"{format_percent(top_lead_share)} do valor de Closed Won. Referral aparece como a segunda principal alavanca."
+        f"{top_lead_category} domina a receita fechada e responde por "
+        f"{format_percent(top_lead_share)} do valor de Closed Won."
     )
 
     top_open = open_pipeline.nlargest(10, "Amount")[
@@ -489,7 +496,7 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
             "Close_Date": "Data esperada de fechamento",
         }
     )
-    top_open_table = dataframe_to_table(top_open, money_columns={"Valor"})
+    top_open_table = dataframe_to_table(top_open, money_columns={"Valor"}, enable_tooltip=False)
     note_3 = (
         f"A maior oportunidade aberta hoje é de {escape(top_open.iloc[0]['Cliente'])}, com "
         f"{format_currency(float(top_open.iloc[0]['Valor']))}. O topo do pipeline está concentrado em estágios de Pitched e Negotiation."
@@ -520,12 +527,12 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
     ticket_chart = build_bar_chart(
         [label.replace("Project - ", "").replace("Change Order/Upsell", "Upsell") for label in ticket_medio.index],
         ticket_medio.tolist(),
-        "Ticket médio por Type",
+        "Valor médio de deal por Type",
         color=CHART_COLORS["orange"],
     )
     note_5 = (
-        f"Project - Competitive tem o maior ticket médio, em {format_currency(ticket_medio.max())}. "
-        f"Project - Not Competitive roda com ticket bem menor, o que muda a expectativa de priorização comercial."
+        f"'Project - Competitive' tem o maior ticket médio, em {format_currency(ticket_medio.max())}. "
+        f"'Project - Not Competitive' roda com ticket bem menor, o que muda a expectativa de priorização comercial."
     )
 
     pipeline_stage = open_pipeline.groupby("Stage")["Amount"].sum().reindex(STAGE_ORDER).dropna()
@@ -533,7 +540,7 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
     pipeline_stage_chart = build_bar_chart(
         pipeline_stage.index.tolist(),
         pipeline_stage.tolist(),
-        "Pipeline aberto por Stage",
+        "Gráfico com a soma de 'Amount' em cada estágio (apenas oportunidades em aberto)",
         color=CHART_COLORS["blue"],
     )
     note_6 = (
@@ -557,12 +564,12 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
             "Upsell": mix["Upsell"].tolist(),
         },
         {"New Business": CHART_COLORS["sand"], "Upsell": CHART_COLORS["teal"]},
-        "Mix New Business vs Upsell ao longo do tempo",
+        "Gráfico com a proporção entre 'Project - Competitive' / 'Not Competitive'(NewBusiness) e 'Change Order/Upsell' por mês de fechamento",
     )
     upsell_months = (mix["Upsell"] > mix["New Business"]).sum()
     note_7 = (
         f"O mix mensal é puxado por Upsell em {upsell_months} dos {len(mix)} meses com volume. "
-        f"O peso de Change Order/Upsell fica ainda mais forte entre março e julho."
+        f"O peso de 'Change Order/Upsell' fica ainda mais forte entre março e julho."
     )
 
     cycle = closed_won.groupby("Lead_Office")["Cycle_Days"].mean().reindex(CANONICAL_OFFICES := [
@@ -587,7 +594,7 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
     clients_chart = build_horizontal_bar_chart(
         top_clients.index.tolist(),
         top_clients.tolist(),
-        "Top 10 clientes Closed Won (YTD)",
+        "Os maiores clientes por valor total fechado em 2026",
         color=CHART_COLORS["teal"],
     )
     note_9 = (
@@ -596,7 +603,7 @@ def build_analysis_html(deals: pd.DataFrame) -> str:
     )
 
     ages = open_pipeline["Age_Days"].dropna().clip(lower=0).tolist()
-    histogram = build_histogram(ages, bins=7, title="Idade do pipeline aberto (dias desde Created_Date)")
+    histogram = build_histogram(ages, bins=7, title="Histograma dos dias desde 'Created_Date' para oportunidades ainda em aberto")
     older_than_90 = sum(value > 90 for value in ages)
     note_10 = (
         f"Na data de execução ({REPORT_DATE.strftime('%d/%m/%Y')}), a idade mediana do pipeline aberto é de "
