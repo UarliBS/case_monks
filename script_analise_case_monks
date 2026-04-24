@@ -1,0 +1,969 @@
+from __future__ import annotations
+
+import html
+import math
+import os
+from datetime import date
+from pathlib import Path
+
+import pandas as pd
+
+
+BASE_DIR = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
+INPUT_FILE = BASE_DIR / "opps_corrigido.xlsx"
+OUTPUT_HTML = BASE_DIR / os.environ.get("ANALYSIS_HTML_NAME", "analise.html")
+REPORT_DATE = pd.Timestamp(os.environ.get("REPORT_DATE", str(date.today())))
+
+MONTH_ORDER = [f"2026-{month:02d}" for month in range(1, 13)]
+MONTH_LABELS = {
+    "2026-01": "Jan/26",
+    "2026-02": "Fev/26",
+    "2026-03": "Mar/26",
+    "2026-04": "Abr/26",
+    "2026-05": "Mai/26",
+    "2026-06": "Jun/26",
+    "2026-07": "Jul/26",
+    "2026-08": "Ago/26",
+    "2026-09": "Set/26",
+    "2026-10": "Out/26",
+    "2026-11": "Nov/26",
+    "2026-12": "Dez/26",
+}
+
+TYPE_ORDER = [
+    "Project - Competitive",
+    "Project - Not Competitive",
+    "Change Order/Upsell",
+]
+
+STAGE_ORDER = [
+    "Opportunity Identified",
+    "Qualified",
+    "Registration",
+    "Pitching",
+    "Pitched",
+    "Negotiation",
+]
+
+LEAD_SOURCE_CATEGORY_ORDER = [
+    "Customer Success",
+    "Referral",
+    "Inbound",
+    "Outbound",
+    "Unknown",
+    "Event",
+]
+
+CHART_COLORS = {
+    "teal": "#0f766e",
+    "teal_light": "#7dd3c7",
+    "sand": "#d6b68a",
+    "orange": "#b45309",
+    "gold": "#d97706",
+    "slate": "#475569",
+    "rose": "#be123c",
+    "blue": "#1d4ed8",
+    "mint": "#10b981",
+    "charcoal": "#1f2937",
+}
+
+
+def format_currency(value: float) -> str:
+    formatted = f"{float(value):,.2f}"
+    return "R$ " + formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_number(value: float, decimals: int = 0) -> str:
+    formatted = f"{float(value):,.{decimals}f}"
+    return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_percent(value: float) -> str:
+    return f"{value:.1f}%".replace(".", ",")
+
+
+def escape(value: object) -> str:
+    if pd.isna(value):
+        return "—"
+    if isinstance(value, pd.Timestamp):
+        return value.strftime("%d/%m/%Y")
+    return html.escape(str(value))
+
+
+def escape_attr(value: object) -> str:
+    return html.escape(str(value), quote=True)
+
+
+def svg_card(title: str, svg_content: str, legend_html: str = "") -> str:
+    return f"""
+    <div class="viz-frame interactive-card" data-tooltip="{escape_attr(title)}">
+      <div class="viz-title">{html.escape(title)}</div>
+      {svg_content}
+      {legend_html}
+    </div>
+    """
+
+
+def build_bar_chart(
+    labels: list[str],
+    values: list[float],
+    title: str,
+    color: str = CHART_COLORS["teal"],
+    value_formatter=None,
+    tick_formatter=None,
+) -> str:
+    width = 860
+    height = 360
+    margin_left = 72
+    margin_right = 24
+    margin_top = 28
+    margin_bottom = 64
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    max_value = max(values) if values else 0
+    max_value = max_value if max_value > 0 else 1
+    bar_gap = 14
+    bar_width = (plot_width - bar_gap * max(len(values) - 1, 0)) / max(len(values), 1)
+    value_formatter = value_formatter or format_currency
+    tick_formatter = tick_formatter or (lambda value: f"{format_number(value / 1_000_000, 1)}M")
+
+    bars = []
+    for idx, (label, value) in enumerate(zip(labels, values)):
+        x = margin_left + idx * (bar_width + bar_gap)
+        bar_height = (value / max_value) * (plot_height - 12)
+        y = margin_top + plot_height - bar_height
+        tooltip = escape_attr(f"{label}: {value_formatter(value)}")
+        bars.append(
+            f"""
+            <rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{bar_height:.1f}" rx="8" fill="{color}" class="interactive-shape" data-tooltip="{tooltip}" />
+            <text x="{x + bar_width / 2:.1f}" y="{margin_top + plot_height + 24}" text-anchor="middle" class="axis-label">{html.escape(label)}</text>
+            <text x="{x + bar_width / 2:.1f}" y="{y - 8:.1f}" text-anchor="middle" class="value-label">{html.escape(value_formatter(value))}</text>
+            """
+        )
+
+    ticks = []
+    for step in range(5):
+        tick_value = max_value * (step / 4)
+        y = margin_top + plot_height - (tick_value / max_value) * plot_height
+        ticks.append(
+            f"""
+            <line x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}" class="grid-line" />
+            <text x="{margin_left - 10}" y="{y + 4:.1f}" text-anchor="end" class="axis-label">{html.escape(tick_formatter(tick_value))}</text>
+            """
+        )
+
+    svg = f"""
+    <svg viewBox="0 0 {width} {height}" class="chart-svg" role="img" aria-label="{html.escape(title)}">
+      {''.join(ticks)}
+      <line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />
+      {''.join(bars)}
+    </svg>
+    """
+    return svg_card(title, svg)
+
+
+def polar_to_cartesian(cx: float, cy: float, radius: float, angle_deg: float) -> tuple[float, float]:
+    radians = math.radians(angle_deg)
+    return cx + radius * math.cos(radians), cy + radius * math.sin(radians)
+
+
+def donut_slice_path(cx: float, cy: float, outer_r: float, inner_r: float, start_deg: float, end_deg: float) -> str:
+    start_outer = polar_to_cartesian(cx, cy, outer_r, start_deg)
+    end_outer = polar_to_cartesian(cx, cy, outer_r, end_deg)
+    start_inner = polar_to_cartesian(cx, cy, inner_r, end_deg)
+    end_inner = polar_to_cartesian(cx, cy, inner_r, start_deg)
+    large_arc = 1 if end_deg - start_deg > 180 else 0
+    return (
+        f"M {start_outer[0]:.2f} {start_outer[1]:.2f} "
+        f"A {outer_r} {outer_r} 0 {large_arc} 1 {end_outer[0]:.2f} {end_outer[1]:.2f} "
+        f"L {start_inner[0]:.2f} {start_inner[1]:.2f} "
+        f"A {inner_r} {inner_r} 0 {large_arc} 0 {end_inner[0]:.2f} {end_inner[1]:.2f} Z"
+    )
+
+
+def build_donut_chart(labels: list[str], values: list[float], title: str, colors: list[str]) -> str:
+    width = 860
+    height = 360
+    cx = 200
+    cy = 180
+    outer_r = 118
+    inner_r = 62
+    total = sum(values) if values else 1
+    start = -90
+    slices = []
+    legend_rows = []
+
+    for idx, (label, value) in enumerate(zip(labels, values)):
+        angle = (value / total) * 360 if total else 0
+        end = start + angle
+        color = colors[idx % len(colors)]
+        tooltip = escape_attr(f"{label}: {format_currency(value)} ({format_percent((value / total) * 100 if total else 0)})")
+        slices.append(
+            f'<path d="{donut_slice_path(cx, cy, outer_r, inner_r, start, end)}" fill="{color}" class="interactive-shape" data-tooltip="{tooltip}" />'
+        )
+        legend_rows.append(
+            f"""
+            <div class="legend-item interactive-card" data-tooltip="{tooltip}">
+              <span class="legend-dot" style="background:{color}"></span>
+              <span>{html.escape(label)}</span>
+              <strong>{html.escape(format_percent((value / total) * 100 if total else 0))}</strong>
+            </div>
+            """
+        )
+        start = end
+
+    center = f"""
+      <text x="{cx}" y="{cy - 8}" text-anchor="middle" class="donut-center-label">Total</text>
+      <text x="{cx}" y="{cy + 20}" text-anchor="middle" class="donut-center-value">{html.escape(format_currency(total))}</text>
+    """
+
+    svg = f"""
+    <div class="donut-layout">
+      <svg viewBox="0 0 {width} {height}" class="chart-svg" role="img" aria-label="{html.escape(title)}">
+        {''.join(slices)}
+        {center}
+      </svg>
+      <div class="legend-box">
+        {''.join(legend_rows)}
+      </div>
+    </div>
+    """
+    return svg_card(title, svg)
+
+
+def build_horizontal_bar_chart(labels: list[str], values: list[float], title: str, color: str = CHART_COLORS["orange"]) -> str:
+    width = 860
+    row_height = 36
+    height = max(320, 70 + row_height * len(labels))
+    margin_left = 240
+    margin_right = 80
+    margin_top = 24
+    plot_width = width - margin_left - margin_right
+    max_value = max(values) if values else 1
+    max_value = max_value if max_value > 0 else 1
+
+    bars = []
+    for idx, (label, value) in enumerate(zip(labels, values)):
+        y = margin_top + idx * row_height
+        bar_width = (value / max_value) * plot_width
+        tooltip = escape_attr(f"{label}: {format_currency(value)}")
+        bars.append(
+            f"""
+            <text x="{margin_left - 12}" y="{y + 22}" text-anchor="end" class="axis-label">{html.escape(label)}</text>
+            <rect x="{margin_left}" y="{y + 6}" width="{bar_width:.1f}" height="22" rx="7" fill="{color}" class="interactive-shape" data-tooltip="{tooltip}" />
+            <text x="{margin_left + bar_width + 8:.1f}" y="{y + 22}" class="value-label">{html.escape(format_currency(value))}</text>
+            """
+        )
+
+    svg = f"""
+    <svg viewBox="0 0 {width} {height}" class="chart-svg" role="img" aria-label="{html.escape(title)}">
+      {''.join(bars)}
+    </svg>
+    """
+    return svg_card(title, svg)
+
+
+def build_stacked_bar_chart(labels: list[str], series: dict[str, list[float]], colors: dict[str, str], title: str) -> str:
+    width = 860
+    height = 380
+    margin_left = 72
+    margin_right = 24
+    margin_top = 28
+    margin_bottom = 72
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    totals = [sum(series[name][idx] for name in series) for idx in range(len(labels))]
+    max_total = max(totals) if totals else 1
+    max_total = max_total if max_total > 0 else 1
+    bar_gap = 14
+    bar_width = (plot_width - bar_gap * max(len(labels) - 1, 0)) / max(len(labels), 1)
+
+    bars = []
+    for idx, label in enumerate(labels):
+        x = margin_left + idx * (bar_width + bar_gap)
+        current_top = margin_top + plot_height
+        total_value = totals[idx]
+        for name, values in series.items():
+            value = values[idx]
+            segment_height = (value / max_total) * (plot_height - 12)
+            y = current_top - segment_height
+            tooltip = escape_attr(f"{label} | {name}: {format_currency(value)} | Total: {format_currency(total_value)}")
+            bars.append(
+                f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{segment_height:.1f}" rx="6" fill="{colors[name]}" class="interactive-shape" data-tooltip="{tooltip}" />'
+            )
+            current_top = y
+        bars.append(
+            f"""
+            <text x="{x + bar_width / 2:.1f}" y="{margin_top + plot_height + 24}" text-anchor="middle" class="axis-label">{html.escape(label)}</text>
+            <text x="{x + bar_width / 2:.1f}" y="{current_top - 8:.1f}" text-anchor="middle" class="value-label">{html.escape(format_currency(totals[idx]))}</text>
+            """
+        )
+
+    legend = "".join(
+        f"""
+        <div class="legend-item">
+          <span class="legend-dot" style="background:{color}"></span>
+          <span>{html.escape(name)}</span>
+        </div>
+        """
+        for name, color in colors.items()
+    )
+
+    interactive_legend = "".join(
+        f"""
+        <div class="legend-item interactive-card" data-tooltip="{escape_attr(name)}">
+          <span class="legend-dot" style="background:{color}"></span>
+          <span>{html.escape(name)}</span>
+        </div>
+        """
+        for name, color in colors.items()
+    )
+
+    svg = f"""
+    <svg viewBox="0 0 {width} {height}" class="chart-svg" role="img" aria-label="{html.escape(title)}">
+      <line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />
+      {''.join(bars)}
+    </svg>
+    """
+    return svg_card(title, svg, f'<div class="legend-row">{interactive_legend or legend}</div>')
+
+
+def build_histogram(values: list[float], bins: int, title: str, color: str = CHART_COLORS["slate"]) -> str:
+    if not values:
+        return svg_card(title, "<p>Sem dados disponíveis.</p>")
+
+    minimum = min(values)
+    maximum = max(values)
+    span = max(maximum - minimum, 1)
+    bin_width = math.ceil(span / bins)
+    edges = [minimum + bin_width * idx for idx in range(bins)]
+    counts = [0] * bins
+
+    for value in values:
+        index = min(int((value - minimum) / bin_width), bins - 1)
+        counts[index] += 1
+
+    labels = [f"{int(edge)}-{int(edge + bin_width - 1)}" for edge in edges]
+    width = 860
+    height = 360
+    margin_left = 72
+    margin_right = 24
+    margin_top = 28
+    margin_bottom = 72
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    max_count = max(counts) if counts else 1
+    bar_gap = 10
+    bar_width = (plot_width - bar_gap * max(len(counts) - 1, 0)) / max(len(counts), 1)
+
+    bars = []
+    for idx, (label, count) in enumerate(zip(labels, counts)):
+        x = margin_left + idx * (bar_width + bar_gap)
+        bar_height = (count / max_count) * (plot_height - 12)
+        y = margin_top + plot_height - bar_height
+        tooltip = escape_attr(f"{label} dias: {count} oportunidade(s)")
+        bars.append(
+            f"""
+            <rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{bar_height:.1f}" rx="7" fill="{color}" class="interactive-shape" data-tooltip="{tooltip}" />
+            <text x="{x + bar_width / 2:.1f}" y="{margin_top + plot_height + 24}" text-anchor="middle" class="axis-label small">{html.escape(label)}</text>
+            <text x="{x + bar_width / 2:.1f}" y="{y - 8:.1f}" text-anchor="middle" class="value-label">{count}</text>
+            """
+        )
+
+    svg = f"""
+    <svg viewBox="0 0 {width} {height}" class="chart-svg" role="img" aria-label="{html.escape(title)}">
+      <line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{width - margin_right}" y2="{margin_top + plot_height}" class="axis-line" />
+      {''.join(bars)}
+    </svg>
+    """
+    return svg_card(title, svg)
+
+
+def dataframe_to_table(df: pd.DataFrame, money_columns: set[str] | None = None) -> str:
+    money_columns = money_columns or set()
+    headers = "".join(f"<th>{html.escape(str(column))}</th>" for column in df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = []
+        tooltip_parts = []
+        for column, value in row.items():
+            if pd.isna(value):
+                rendered = "—"
+            elif column in money_columns:
+                rendered = format_currency(float(value))
+            elif isinstance(value, pd.Timestamp):
+                rendered = value.strftime("%d/%m/%Y")
+            else:
+                rendered = html.escape(str(value))
+            cells.append(f"<td>{rendered}</td>")
+            tooltip_parts.append(f"{column}: {rendered}")
+        rows.append(f'<tr class="interactive-row" data-tooltip="{escape_attr(" | ".join(tooltip_parts))}">{"".join(cells)}</tr>')
+    return f'<div class="table-wrap"><table><thead><tr>{headers}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
+
+
+def build_metric_badges(metrics: list[tuple[str, str]]) -> str:
+    cards = []
+    for label, value in metrics:
+        cards.append(
+            f"""
+            <div class="metric-card interactive-card" data-tooltip="{escape_attr(f'{label}: {value}')}">
+              <span class="metric-value">{html.escape(value)}</span>
+              <span class="metric-label">{html.escape(label)}</span>
+            </div>
+            """
+        )
+    return f'<div class="metric-grid">{"".join(cards)}</div>'
+
+
+def build_section(title: str, content: str, note: str) -> str:
+    return f"""
+    <section class="section-card interactive-card" data-tooltip="{escape_attr(title)}">
+      <h2>{html.escape(title)}</h2>
+      {content}
+      <p class="note">{html.escape(note)}</p>
+    </section>
+    """
+
+
+def prepare_data() -> pd.DataFrame:
+    deals = pd.read_excel(INPUT_FILE, sheet_name="deals_unicos")
+    deals["Close_Date"] = pd.to_datetime(deals["Close_Date"], errors="coerce")
+    deals["Created_Date"] = pd.to_datetime(deals["Created_Date"], errors="coerce")
+    deals["Cycle_Days"] = (deals["Close_Date"] - deals["Created_Date"]).dt.days
+    deals["Age_Days"] = (REPORT_DATE - deals["Created_Date"]).dt.days
+    deals["Close_Month"] = deals["Close_Date"].dt.to_period("M").astype(str)
+    deals["Business_Bucket"] = deals["Type"].map(
+        lambda value: "Upsell" if value == "Change Order/Upsell" else "New Business"
+    )
+    return deals
+
+
+def build_analysis_html(deals: pd.DataFrame) -> str:
+    closed_won = deals[(deals["Status"] == "Closed Won") & (deals["Close_Date"].dt.year == 2026)].copy()
+    open_pipeline = deals[deals["Status"] == "Open Pipeline"].copy()
+
+    closed_mom = (
+        closed_won.groupby("Close_Month")["Amount"].sum().reindex(MONTH_ORDER).dropna()
+    )
+    closed_mom_labels = [MONTH_LABELS.get(month, month) for month in closed_mom.index]
+    revenue_chart = build_bar_chart(closed_mom_labels, closed_mom.tolist(), "Receita Closed Won mês a mês")
+    best_month = closed_mom.idxmax()
+    note_1 = (
+        f"O pico de receita fechada aconteceu em {MONTH_LABELS.get(best_month, best_month)}, com "
+        f"{format_currency(closed_mom.max())}. Depois de fevereiro, o volume de Closed Won desacelerou nos meses seguintes."
+    )
+
+    lead_share = closed_won.groupby("Lead_Source_Category")["Amount"].sum().reindex(
+        LEAD_SOURCE_CATEGORY_ORDER
+    ).dropna()
+    lead_share = lead_share[lead_share > 0]
+    donut_colors = [
+        CHART_COLORS["teal"],
+        CHART_COLORS["sand"],
+        CHART_COLORS["orange"],
+        CHART_COLORS["blue"],
+        CHART_COLORS["rose"],
+        CHART_COLORS["slate"],
+    ]
+    lead_share_chart = build_donut_chart(
+        lead_share.index.tolist(),
+        lead_share.tolist(),
+        "Participação de receita Closed Won por Lead Source",
+        donut_colors,
+    )
+    top_lead_category = lead_share.idxmax()
+    top_lead_share = (lead_share.max() / lead_share.sum()) * 100
+    note_2 = (
+        f"Customer Success domina a receita fechada: {top_lead_category} responde por "
+        f"{format_percent(top_lead_share)} do valor de Closed Won. Referral aparece como a segunda principal alavanca."
+    )
+
+    top_open = open_pipeline.nlargest(10, "Amount")[
+        ["Account_Name", "Product_List", "Stage", "Amount", "Close_Date"]
+    ].rename(
+        columns={
+            "Account_Name": "Cliente",
+            "Product_List": "Produto(s)",
+            "Stage": "Estágio",
+            "Amount": "Valor",
+            "Close_Date": "Data esperada de fechamento",
+        }
+    )
+    top_open_table = dataframe_to_table(top_open, money_columns={"Valor"})
+    note_3 = (
+        f"A maior oportunidade aberta hoje é de {escape(top_open.iloc[0]['Cliente'])}, com "
+        f"{format_currency(float(top_open.iloc[0]['Valor']))}. O topo do pipeline está concentrado em estágios de Pitched e Negotiation."
+    )
+
+    win_rate = (
+        deals.assign(Is_Closed=deals["Status"].eq("Closed Won"))
+        .groupby("Lead_Source_Category")["Is_Closed"]
+        .mean()
+        .mul(100)
+        .reindex(LEAD_SOURCE_CATEGORY_ORDER)
+        .dropna()
+    )
+    win_rate_chart = build_bar_chart(
+        win_rate.index.tolist(),
+        win_rate.tolist(),
+        "Win rate por Lead Source",
+        color=CHART_COLORS["gold"],
+        value_formatter=format_percent,
+        tick_formatter=format_percent,
+    )
+    note_4 = (
+        f"Customer Success tem o melhor win rate da base, com {format_percent(win_rate.max())}. "
+        f"Event ainda não converteu nenhum deal na base corrigida."
+    )
+
+    ticket_medio = deals.groupby("Type")["Amount"].mean().reindex(TYPE_ORDER).dropna()
+    ticket_chart = build_bar_chart(
+        [label.replace("Project - ", "").replace("Change Order/Upsell", "Upsell") for label in ticket_medio.index],
+        ticket_medio.tolist(),
+        "Ticket médio por Type",
+        color=CHART_COLORS["orange"],
+    )
+    note_5 = (
+        f"Project - Competitive tem o maior ticket médio, em {format_currency(ticket_medio.max())}. "
+        f"Project - Not Competitive roda com ticket bem menor, o que muda a expectativa de priorização comercial."
+    )
+
+    pipeline_stage = open_pipeline.groupby("Stage")["Amount"].sum().reindex(STAGE_ORDER).dropna()
+    pipeline_stage = pipeline_stage[pipeline_stage > 0]
+    pipeline_stage_chart = build_bar_chart(
+        pipeline_stage.index.tolist(),
+        pipeline_stage.tolist(),
+        "Pipeline aberto por Stage",
+        color=CHART_COLORS["blue"],
+    )
+    note_6 = (
+        f"Pitched concentra o maior valor em aberto, com {format_currency(pipeline_stage.max())}, "
+        f"seguido de Negotiation. Isso mostra que a maior parte do pipeline já está em fases comerciais avançadas."
+    )
+
+    mix = (
+        deals[deals["Close_Date"].dt.year == 2026]
+        .groupby(["Close_Month", "Business_Bucket"])["Amount"]
+        .sum()
+        .unstack(fill_value=0)
+        .reindex(MONTH_ORDER)
+        .fillna(0)
+    )
+    mix = mix[(mix.sum(axis=1) > 0)]
+    mix_chart = build_stacked_bar_chart(
+        [MONTH_LABELS.get(month, month) for month in mix.index],
+        {
+            "New Business": mix["New Business"].tolist(),
+            "Upsell": mix["Upsell"].tolist(),
+        },
+        {"New Business": CHART_COLORS["sand"], "Upsell": CHART_COLORS["teal"]},
+        "Mix New Business vs Upsell ao longo do tempo",
+    )
+    upsell_months = (mix["Upsell"] > mix["New Business"]).sum()
+    note_7 = (
+        f"O mix mensal é puxado por Upsell em {upsell_months} dos {len(mix)} meses com volume. "
+        f"O peso de Change Order/Upsell fica ainda mais forte entre março e julho."
+    )
+
+    cycle = closed_won.groupby("Lead_Office")["Cycle_Days"].mean().reindex(CANONICAL_OFFICES := [
+        "Sao Carlos, BR",
+        "Votorantim, BR",
+        "Sao Paulo, BR",
+    ]).dropna()
+    cycle_chart = build_bar_chart(
+        cycle.index.tolist(),
+        cycle.tolist(),
+        "Ciclo médio de venda por Lead Office",
+        color=CHART_COLORS["rose"],
+        value_formatter=lambda value: f"{format_number(value, 1)} dias",
+        tick_formatter=lambda value: f"{format_number(value, 0)}d",
+    )
+    note_8 = (
+        f"Sao Carlos, BR tem o ciclo médio mais curto, perto de {format_number(cycle.min(), 1)} dias, "
+        f"enquanto Sao Paulo, BR opera com o ciclo mais longo da base."
+    )
+
+    top_clients = closed_won.groupby("Account_Name")["Amount"].sum().sort_values(ascending=False).head(10)
+    clients_chart = build_horizontal_bar_chart(
+        top_clients.index.tolist(),
+        top_clients.tolist(),
+        "Top 10 clientes Closed Won (YTD)",
+        color=CHART_COLORS["teal"],
+    )
+    note_9 = (
+        f"Saffron Fashion lidera o ranking com {format_currency(top_clients.iloc[0])}. "
+        f"Os 3 maiores clientes já representam uma fatia relevante da receita fechada no ano."
+    )
+
+    ages = open_pipeline["Age_Days"].dropna().clip(lower=0).tolist()
+    histogram = build_histogram(ages, bins=7, title="Idade do pipeline aberto (dias desde Created_Date)")
+    older_than_90 = sum(value > 90 for value in ages)
+    note_10 = (
+        f"Na data de execução ({REPORT_DATE.strftime('%d/%m/%Y')}), a idade mediana do pipeline aberto é de "
+        f"{format_number(pd.Series(ages).median(), 0)} dias. Ainda existem {older_than_90} oportunidades abertas com mais de 90 dias."
+    )
+
+    summary_metrics = build_metric_badges(
+        [
+            ("Deals únicos analisados", str(len(deals))),
+            ("Closed Won em 2026", str(len(closed_won))),
+            ("Open Pipeline", str(len(open_pipeline))),
+            ("Receita Closed Won 2026", format_currency(closed_won["Amount"].sum())),
+        ]
+    )
+
+    sections = [
+        build_section("1. Receita Closed Won MoM", revenue_chart, note_1),
+        build_section("2. Participação % por Lead_Source", lead_share_chart, note_2),
+        build_section("3. Top 10 Oportunidades em Aberto", top_open_table, note_3),
+        build_section("4. Win rate por Lead_Source", win_rate_chart, note_4),
+        build_section("5. Ticket médio por Type", ticket_chart, note_5),
+        build_section("6. Pipeline em aberto por Stage", pipeline_stage_chart, note_6),
+        build_section("7. Mix New Business vs Upsell ao longo do tempo", mix_chart, note_7),
+        build_section("8. Ciclo de venda médio", cycle_chart, note_8),
+        build_section("9. Top 10 clientes Closed Won (YTD)", clients_chart, note_9),
+        build_section("10. Idade do pipeline aberto", histogram, note_10),
+    ]
+
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Análise Comercial - Case Monks</title>
+  <style>
+    :root {{
+      --bg: #f3eee5;
+      --surface: #fffdf9;
+      --ink: #1f2937;
+      --muted: #5b6472;
+      --line: #ded5c7;
+      --brand: #0f766e;
+      --brand-2: #b45309;
+      --soft: #eef8f6;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 22%),
+        linear-gradient(180deg, #faf7f1 0%, var(--bg) 100%);
+    }}
+    .page {{
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 36px 20px 56px;
+    }}
+    .hero {{
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 32px;
+      box-shadow: 0 18px 42px rgba(31, 41, 55, 0.08);
+    }}
+    h1, h2 {{ margin-top: 0; }}
+    h1 {{ font-size: 2.1rem; margin-bottom: 10px; }}
+    p {{ line-height: 1.6; }}
+    .muted {{ color: var(--muted); }}
+    .metric-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-top: 24px;
+    }}
+    .metric-card {{
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffffff, #f7fbfb);
+      padding: 18px;
+    }}
+    .metric-value {{
+      display: block;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--brand);
+    }}
+    .metric-label {{
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }}
+    .section-grid {{
+      display: grid;
+      gap: 22px;
+      margin-top: 24px;
+    }}
+    .section-card {{
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 26px;
+      box-shadow: 0 14px 34px rgba(31, 41, 55, 0.06);
+    }}
+    .interactive-card {{
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+      cursor: default;
+    }}
+    .interactive-card:hover {{
+      transform: translateY(-3px);
+      box-shadow: 0 18px 38px rgba(15, 118, 110, 0.12);
+      border-color: rgba(15, 118, 110, 0.28);
+    }}
+    .viz-frame {{
+      margin-top: 14px;
+      border: 1px solid #ece5d8;
+      border-radius: 20px;
+      padding: 16px;
+      background: #fffdfa;
+      overflow-x: auto;
+    }}
+    .viz-title {{
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: var(--ink);
+    }}
+    .chart-svg {{
+      width: 100%;
+      height: auto;
+      min-width: 760px;
+    }}
+    .axis-line {{
+      stroke: #cfc6b7;
+      stroke-width: 1.2;
+    }}
+    .grid-line {{
+      stroke: #ece5d8;
+      stroke-width: 1;
+    }}
+    .axis-label {{
+      font-size: 12px;
+      fill: #5b6472;
+    }}
+    .axis-label.small {{
+      font-size: 10px;
+    }}
+    .value-label {{
+      font-size: 11px;
+      fill: #1f2937;
+      font-weight: 600;
+    }}
+    .interactive-shape {{
+      cursor: pointer;
+      transition: opacity 0.18s ease, filter 0.18s ease, transform 0.18s ease;
+      transform-box: fill-box;
+      transform-origin: center;
+    }}
+    .interactive-shape:hover {{
+      opacity: 0.92;
+      filter: brightness(1.06) drop-shadow(0 5px 10px rgba(31, 41, 55, 0.18));
+      transform: translateY(-2px);
+    }}
+    .donut-center-label {{
+      font-size: 14px;
+      fill: #5b6472;
+    }}
+    .donut-center-value {{
+      font-size: 16px;
+      fill: #1f2937;
+      font-weight: 700;
+    }}
+    .donut-layout {{
+      display: grid;
+      grid-template-columns: minmax(420px, 1fr) 320px;
+      gap: 18px;
+      align-items: center;
+    }}
+    .legend-box, .legend-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 18px;
+      align-items: center;
+    }}
+    .legend-box {{
+      flex-direction: column;
+      align-items: stretch;
+    }}
+    .legend-item {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: #f8f4ec;
+      font-size: 0.94rem;
+    }}
+    .legend-dot {{
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      display: inline-block;
+      margin-right: 8px;
+      flex: 0 0 12px;
+    }}
+    .table-wrap {{
+      overflow-x: auto;
+      margin-top: 14px;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+      font-size: 0.94rem;
+    }}
+    th, td {{
+      border: 1px solid #ece5d8;
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }}
+    th {{
+      background: #f6efe1;
+    }}
+    tbody tr {{
+      transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+    }}
+    .interactive-row {{
+      cursor: pointer;
+    }}
+    .interactive-row:hover {{
+      background: #fff7eb;
+      transform: translateX(4px);
+      box-shadow: inset 4px 0 0 rgba(180, 83, 9, 0.24);
+    }}
+    .note {{
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-left: 4px solid var(--brand-2);
+      background: #fff5e8;
+      border-radius: 12px;
+    }}
+    .hover-tooltip {{
+      position: fixed;
+      z-index: 9999;
+      pointer-events: none;
+      max-width: 320px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(31, 41, 55, 0.94);
+      color: #fff;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.32);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.14s ease, transform 0.14s ease;
+    }}
+    .hover-tooltip.visible {{
+      opacity: 1;
+      transform: translateY(0);
+    }}
+    @media (max-width: 920px) {{
+      .page {{ padding: 18px 14px 40px; }}
+      .hero, .section-card {{ padding: 20px; border-radius: 18px; }}
+      .donut-layout {{ grid-template-columns: 1fr; }}
+      .chart-svg {{ min-width: 680px; }}
+      h1 {{ font-size: 1.7rem; }}
+    }}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>Análise comercial a partir da base corrigida</h1>
+      <p>
+        Este relatório usa a aba <strong>deals_unicos</strong> do arquivo <code>opps_corrigido.xlsx</code> para evitar dupla contagem
+        de oportunidades em deals com vários produtos. Para os gráficos de pipeline, a coluna <code>Close_Date</code> foi tratada
+        como a data esperada de fechamento das oportunidades ainda abertas.
+      </p>
+      <p class="muted">
+        Data de referência para a idade do pipeline aberto: {REPORT_DATE.strftime('%d/%m/%Y')}.
+      </p>
+      {summary_metrics}
+    </section>
+    <div class="section-grid">
+      {''.join(sections)}
+    </div>
+  </main>
+  <div id="hover-tooltip" class="hover-tooltip" aria-hidden="true"></div>
+  <script>
+    (() => {{
+      const tooltip = document.getElementById('hover-tooltip');
+      let activeElement = null;
+
+      const moveTooltip = (event) => {{
+        if (!activeElement) return;
+        const offset = 16;
+        const rect = tooltip.getBoundingClientRect();
+        let left = event.clientX + offset;
+        let top = event.clientY + offset;
+
+        if (left + rect.width > window.innerWidth - 12) {{
+          left = event.clientX - rect.width - offset;
+        }}
+        if (top + rect.height > window.innerHeight - 12) {{
+          top = event.clientY - rect.height - offset;
+        }}
+
+        tooltip.style.left = `${{Math.max(12, left)}}px`;
+        tooltip.style.top = `${{Math.max(12, top)}}px`;
+      }};
+
+      const showTooltip = (element, event) => {{
+        const message = element.getAttribute('data-tooltip');
+        if (!message) return;
+        activeElement = element;
+        tooltip.textContent = message;
+        tooltip.classList.add('visible');
+        tooltip.setAttribute('aria-hidden', 'false');
+        moveTooltip(event);
+      }};
+
+      const hideTooltip = () => {{
+        activeElement = null;
+        tooltip.classList.remove('visible');
+        tooltip.setAttribute('aria-hidden', 'true');
+      }};
+
+      document.addEventListener('mouseover', (event) => {{
+        const target = event.target.closest('[data-tooltip]');
+        if (!target) return;
+        showTooltip(target, event);
+      }});
+
+      document.addEventListener('mousemove', (event) => {{
+        if (activeElement) {{
+          moveTooltip(event);
+        }}
+      }});
+
+      document.addEventListener('mouseout', (event) => {{
+        const from = event.target.closest('[data-tooltip]');
+        const to = event.relatedTarget && event.relatedTarget.closest
+          ? event.relatedTarget.closest('[data-tooltip]')
+          : null;
+        if (from && from !== to) {{
+          hideTooltip();
+        }}
+      }});
+
+      document.addEventListener('scroll', hideTooltip, true);
+    }})();
+  </script>
+</body>
+</html>
+"""
+
+
+def main() -> None:
+    deals = prepare_data()
+    html_output = build_analysis_html(deals)
+    OUTPUT_HTML.write_text(html_output, encoding="utf-8")
+    print(f"Arquivo gerado com sucesso: {OUTPUT_HTML.name}")
+
+
+if __name__ == "__main__":
+    main()
